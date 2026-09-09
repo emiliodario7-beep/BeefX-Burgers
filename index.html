@@ -1,0 +1,1457 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BeefX Burgers — Operations</title>
+<style>
+  :root{
+    --blk:#0D0D0D; --wht:#F5F2EC; --yel:#FFD100; --nvy:#1A3A6E; --grn:#1A5C2A;
+    --red:#C93A1E; --amb:#B5640A; --grey:#F5F5F5; --mgrey:#888; --border:#E3E1DA;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0; font-family:Arial,Helvetica,sans-serif; background:#FAFAF7; color:#1A1A1A; padding-bottom:90px;}
+  header{background:var(--blk); color:var(--wht); padding:16px 16px 12px; position:sticky; top:0; z-index:30;}
+  header .brand{display:flex; align-items:center; gap:8px; margin-bottom:4px;}
+  header .brand .beef{border:2px solid var(--yel); border-radius:99px; padding:4px 14px; display:inline-flex; align-items:center;}
+  header .brand .beef span{color:var(--yel); font-weight:900; font-size:13px; letter-spacing:.05em;}
+  header .brand .x{font-weight:900; color:var(--yel); font-size:18px; margin-left:6px;}
+  header .sub{font-size:11px; color:#aaa; display:flex; align-items:center; gap:6px;}
+  .dot{width:7px; height:7px; border-radius:99px; background:var(--grn); display:inline-block;}
+  .navtabs{display:flex; gap:6px; overflow-x:auto; margin-top:10px; padding-bottom:2px;}
+  .navtabs button{flex:none; background:transparent; border:1px solid #444; color:#ccc; font-size:11.5px; padding:7px 12px; border-radius:99px; cursor:pointer; white-space:nowrap;}
+  .navtabs button.active{background:var(--yel); color:#000; border-color:var(--yel); font-weight:700;}
+  main{padding:14px; max-width:680px; margin:0 auto;}
+
+  .card{background:#fff; border:1px solid var(--border); border-radius:12px; padding:14px; margin-bottom:12px;}
+  .btn{padding:9px 13px; border-radius:10px; border:1px solid #D8D6CE; background:#fff; font-weight:800; font-size:12.5px; cursor:pointer; color:#333;}
+  .btn.primary{background:var(--blk); color:var(--yel); border-color:var(--blk);}
+  .btn.full{width:100%;}
+  .btn.small{padding:5px 9px; font-size:11.5px;}
+  input[type=text],input[type=number],input[type=date],select{width:100%; padding:8px 9px; border:1px solid #D8D6CE; border-radius:8px; font-size:13px; font-family:inherit; background:#fff;}
+  label.field{display:block; margin-bottom:9px;}
+  label.field span{display:block; font-size:11.5px; color:#666; margin-bottom:4px; font-weight:600;}
+  h2.sectitle{font-size:12.5px; text-transform:uppercase; letter-spacing:.04em; color:#666; margin:16px 0 8px;}
+  .cattitle{font-size:11.5px; text-transform:uppercase; letter-spacing:.04em; color:#fff; background:var(--nvy); padding:6px 11px; border-radius:8px; margin:12px 0 7px;}
+  .helptext{font-size:10.5px; color:#999; margin:2px 0 9px;}
+
+  .tablewrap{overflow-x:auto;}
+  .tablewrap table{width:100%; border-collapse:collapse; font-size:11.5px;}
+  .tablewrap th{text-align:left; color:#888; font-weight:700; font-size:10px; text-transform:uppercase; padding:4px 6px; border-bottom:1px solid var(--border); white-space:nowrap;}
+  .tablewrap td{padding:5px 6px; border-bottom:1px solid var(--grey); white-space:nowrap;}
+  .tablewrap td.num{text-align:right; font-weight:700;}
+  .tablewrap input[type=number]{width:66px; padding:4px 5px; font-size:11.5px;}
+  .tablewrap input[type=text]{width:90px; padding:4px 5px; font-size:11.5px;}
+
+  .item-row{background:#fff; border:1px solid var(--border); border-radius:10px; padding:9px 11px; margin-bottom:6px; cursor:pointer;}
+  .item-row .top{display:flex; justify-content:space-between; align-items:center;}
+  .item-row .iname{font-weight:800; font-size:12.5px;}
+  .item-row .imeta{font-size:10.5px; color:#888; margin-top:2px;}
+  .badge{font-size:10px; font-weight:800; padding:4px 9px; border-radius:99px; white-space:nowrap;}
+  .badge.ok{background:#E2F0E4; color:var(--grn);}
+  .badge.reorder{background:#FBE7E2; color:var(--red);}
+  .badge.dev{background:#F0EAFB; color:#6A0D91;}
+
+  .alert-banner{background:#FBE7E2; border:1px solid #F0C7BE; border-radius:10px; padding:9px 11px; margin-bottom:12px;}
+  .alert-banner p{margin:0; font-size:12px; color:var(--red); font-weight:700;}
+  .alert-banner .items{font-size:11px; color:#8a2f20; font-weight:400; margin-top:3px;}
+
+  .logrow{display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid var(--grey); font-size:12px;}
+  .logrow:last-child{border-bottom:none;}
+  .logrow .li-name{font-weight:700;}
+  .logrow .li-meta{color:#888; font-size:10.5px;}
+  .logrow .li-del{background:none; border:none; color:var(--red); font-size:15px; cursor:pointer; padding:3px 7px;}
+
+  .overlay{position:fixed; inset:0; background:rgba(0,0,0,0.4); display:flex; align-items:flex-end; justify-content:center; z-index:100;}
+  .sheet{background:#fff; width:100%; max-width:640px; border-radius:16px 16px 0 0; padding:18px; max-height:85vh; overflow-y:auto;}
+  .sheet h3{font-size:14px; margin:0 0 10px; font-weight:800;}
+
+  .stat-row{display:grid; grid-template-columns:repeat(2,1fr); gap:8px; margin-bottom:12px;}
+  .stat{background:var(--grey); border-radius:10px; padding:11px; text-align:center;}
+  .stat .n{font-size:17px; font-weight:900; margin:0;}
+  .stat .l{font-size:10px; color:#888; margin:3px 0 0; text-transform:uppercase; letter-spacing:.02em;}
+
+  .prodgrid{display:grid; grid-template-columns:repeat(2,1fr); gap:7px; margin-bottom:10px;}
+  .prodbtn{background:#fff; border:1.5px solid var(--border); border-radius:10px; padding:10px 9px; text-align:left; cursor:pointer;}
+  .prodbtn .pname{font-weight:800; font-size:11.5px; margin:0 0 2px; display:block;}
+  .prodbtn .pprice{font-size:11px; color:#888; margin:0;}
+
+  .payrow{display:flex; gap:7px; margin-top:8px;}
+  .payrow button{flex:1; padding:11px 5px; border-radius:10px; border:1.5px solid var(--border); background:#fff; font-weight:800; font-size:12.5px; cursor:pointer;}
+  .daytabs{display:flex; gap:6px; overflow-x:auto; margin-bottom:10px; padding-bottom:2px;}
+  .daytabs button{flex:none; background:#fff; border:1px solid var(--border); color:#555; font-size:11.5px; padding:6px 12px; border-radius:99px; cursor:pointer; white-space:nowrap;}
+  .daytabs button.active{background:var(--blk); color:var(--yel); border-color:var(--blk); font-weight:700;}
+  .daytabs .addday{background:var(--grey); color:#888; font-weight:700;}
+
+  .toast{position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:var(--blk); color:#fff; padding:9px 18px; border-radius:99px; font-size:12px; font-weight:700; opacity:0; transition:opacity .25s; pointer-events:none; z-index:200;}
+  .toast.show{opacity:1;}
+  .empty-state{text-align:center; padding:26px 18px; color:#999; font-size:12.5px; line-height:1.6;}
+  .backbtn{background:none; border:none; color:#555; font-size:12px; font-weight:700; cursor:pointer; padding:0; margin-bottom:6px;}
+  .event-item{background:#fff; border:1px solid var(--border); border-radius:12px; padding:13px; margin-bottom:9px; cursor:pointer; display:flex; justify-content:space-between; align-items:center;}
+  .event-item .ename{font-weight:800; font-size:13px; margin:0 0 3px;}
+  .event-item .emeta{font-size:11px; color:#888; margin:0;}
+  .event-item .erev{font-weight:900; font-size:14px; color:var(--grn);}
+</style>
+</head>
+<body>
+
+<header id="header"><div class="brand"><div class="beef"><span>BEEF</span></div><span class="x">X</span></div>
+    <div class="sub"><span class="dot" style="background:var(--amb);"></span> one-time setup needed</div></header>
+<main id="main">
+  <div class="card">
+    <h2 style="margin:0 0 6px;font-size:14px;">Connect your Google Sheet</h2>
+    <p class="helptext">Paste the Web app URL from your deployed Google Apps Script below. This makes the app talk to a real shared database instead of your own browser, so every device and every person you share the file with sees the same live data.</p>
+    <label class="field"><span>Apps Script Web app URL</span>
+      <input type="text" id="setup-url" placeholder="https://script.google.com/macros/s/.../exec">
+    </label>
+    <button class="btn primary full" id="setup-test">Test connection</button>
+    <p id="setup-result" style="font-size: 12px; margin: 10px 0px 0px; color: var(--grn);">Connected successfully.</p>
+  </div>
+  <div class="card" id="setup-download-card" style="">
+    <h2 style="margin:0 0 6px;font-size:14px;color:var(--grn);">Connected!</h2>
+    <p class="helptext">Download your configured copy below. That file — not this one — is the one to open going forward, and the one to send to your assistants and partners. It has your Sheet connection built in permanently.</p>
+    <button class="btn primary full" id="setup-download">Download my configured BeefX Website</button>
+  </div>
+  <div class="card">
+    <p class="helptext" style="margin:0;">Don't have a Sheet connected yet? Ask for the Apps Script setup steps again and follow them — it takes about five minutes and only needs to be done once.</p>
+  </div></main>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ===================== SOURCE DATA — from BeefX costing sheet ===================== */
+const ITEM_DEFS = [
+  {name:"Ground Beef",price:240,amt:1000,unit:"g"},
+  {name:"Bacon Bits",price:276,amt:1000,unit:"g"},
+  {name:"Longganisa Bits",price:290,amt:1000,unit:"g"},
+  {name:"Monterey Sisig",price:568,amt:1000,unit:"g"},
+  {name:"Mayonnaise",price:850,amt:3500,unit:"tub"},
+  {name:"Fresh Basil",price:970,amt:1000,unit:"g"},
+  {name:"Fresh Kalamansi",price:60,amt:1000,unit:"g"},
+  {name:"Black Pepper - Ground",price:350,amt:500,unit:"g"},
+  {name:"Aviko 7mm Fries - Yellow",price:1100,amt:10000,unit:"g"},
+  {name:"Hamburger Wrapper",price:40,amt:100,unit:"pcs"},
+  {name:"**Awesome Sauce",price:1103,amt:3500,unit:"g"},
+  {name:"*Disposable Gloves",price:1,amt:1,unit:"pc"},
+  {name:"*Ketchup",price:34.5,amt:320,unit:"g"},
+  {name:"Gravy Mix",price:475,amt:1000,unit:"g"},
+  {name:"*Onion",price:200,amt:1000,unit:"g"},
+  {name:"Mozarella Brick",price:930,amt:2000,unit:"g"},
+  {name:"Mustard",price:90.25,amt:200,unit:"g"},
+  {name:"Lettuce",price:800,amt:1000,unit:"g"},
+  {name:"Che Vital",price:390,amt:72,unit:"pc"},
+  {name:"Bun Supplier",price:55,amt:6,unit:"pc"},
+  {name:"Clamshell Box",price:3000,amt:500,unit:"pc"},
+  {name:"Plastic Carrier",price:60,amt:50,unit:"pc"},
+  {name:"Beef X Stickers",price:1200,amt:400,unit:"pc"},
+  {name:"Egg",price:10,amt:1,unit:"pc"},
+  {name:"Sinandomeng Rice",price:170,amt:2000,unit:"g"},
+  {name:"Rice Meal Take Out Container",price:600,amt:50,unit:"pcs"}
+];
+const PRODUCT_DEFS = [
+  {name:"BxBacon QTR", label:"Siga (BeefX Bacon)", sellable:true, defaultPrice:299},
+  {name:"BxLongganisa QTR", label:"Bongga (BeefX Longganisa)", sellable:true, defaultPrice:319},
+  {name:"BxSisig QTR", label:"BxSisig QTR (in development)", sellable:false, defaultPrice:0},
+  {name:"Awesome", label:"Awesome Sauce (prep batch)", sellable:false, defaultPrice:0},
+  {name:"Sisig", label:"Sisig Sauce (prep, reference)", sellable:false, defaultPrice:0},
+  {name:"Swakto Fries", label:"Swakto Fries", sellable:true, defaultPrice:59},
+  {name:"Poutine 120g", label:"Poutine Nating Lahat", sellable:true, defaultPrice:159},
+  {name:"Animal Style Poutine (BACON)", label:"Animal Style Poutine (Bacon)", sellable:true, defaultPrice:229},
+  {name:"Animal Style Poutine (BONGGA)", label:"Animal Style Poutine (Bongga)", sellable:true, defaultPrice:229},
+  {name:"BURGER STEAK (BACON)", label:"Loko Mo Ko (Bacon)", sellable:true, defaultPrice:229},
+  {name:"BURGER STEAK (BONGGA)", label:"Loko Mo Ko (Bongga)", sellable:true, defaultPrice:229}
+];
+const COMBOS = [
+  {name:"Combo Siga", label:"Combo Meal (Siga)", parts:["BxBacon QTR","Poutine 120g"], defaultPrice:419},
+  {name:"Combo Bongga", label:"Combo Meal (Bongga)", parts:["BxLongganisa QTR","Poutine 120g"], defaultPrice:419}
+];
+const BASE_PORTIONS = {
+  "Ground Beef": {"BxBacon QTR":57,"BxLongganisa QTR":57,"BxSisig QTR":57,"Animal Style Poutine (BACON)":57,"Animal Style Poutine (BONGGA)":57,"BURGER STEAK (BACON)":57,"BURGER STEAK (BONGGA)":57},
+  "Bacon Bits": {"BxBacon QTR":57,"Animal Style Poutine (BACON)":57,"BURGER STEAK (BACON)":57},
+  "Longganisa Bits": {"BxLongganisa QTR":57,"Animal Style Poutine (BONGGA)":57,"BURGER STEAK (BONGGA)":57},
+  "Monterey Sisig": {"BxSisig QTR":57},
+  "Mayonnaise": {"Awesome":3500,"Sisig":1},
+  "Fresh Basil": {"Awesome":250},
+  "Fresh Kalamansi": {"Sisig":125},
+  "Black Pepper - Ground": {"Awesome":15},
+  "Aviko 7mm Fries - Yellow": {"Swakto Fries":120,"Poutine 120g":120,"Animal Style Poutine (BACON)":120,"Animal Style Poutine (BONGGA)":120,"BURGER STEAK (BACON)":50,"BURGER STEAK (BONGGA)":50},
+  "Hamburger Wrapper": {"BxBacon QTR":1,"BxLongganisa QTR":1,"BxSisig QTR":1},
+  "**Awesome Sauce": {"BxBacon QTR":20,"BxLongganisa QTR":20},
+  "*Disposable Gloves": {"BxLongganisa QTR":1},
+  "*Ketchup": {"BxBacon QTR":5,"BxLongganisa QTR":5},
+  "Gravy Mix": {"Poutine 120g":5,"Animal Style Poutine (BACON)":5,"Animal Style Poutine (BONGGA)":5,"BURGER STEAK (BACON)":5,"BURGER STEAK (BONGGA)":5},
+  "*Onion": {"BxBacon QTR":10,"BxLongganisa QTR":10,"Animal Style Poutine (BACON)":5,"Animal Style Poutine (BONGGA)":5},
+  "Mozarella Brick": {"Poutine 120g":35,"Animal Style Poutine (BACON)":35,"Animal Style Poutine (BONGGA)":35},
+  "Mustard": {"BxBacon QTR":5,"BxLongganisa QTR":5},
+  "Lettuce": {"BxBacon QTR":10,"BxLongganisa QTR":10},
+  "Che Vital": {"BxBacon QTR":1,"BxLongganisa QTR":1},
+  "Bun Supplier": {"BxBacon QTR":6,"BxLongganisa QTR":6},
+  "Clamshell Box": {"BxBacon QTR":1,"BxLongganisa QTR":1,"Swakto Fries":1,"Poutine 120g":1,"Animal Style Poutine (BACON)":1,"Animal Style Poutine (BONGGA)":1},
+  "Plastic Carrier": {"BxBacon QTR":1,"BxLongganisa QTR":1,"Swakto Fries":1,"Poutine 120g":1,"Animal Style Poutine (BACON)":1,"Animal Style Poutine (BONGGA)":1,"BURGER STEAK (BACON)":1,"BURGER STEAK (BONGGA)":1},
+  "Beef X Stickers": {"BxBacon QTR":1,"BxLongganisa QTR":1,"Swakto Fries":1,"Poutine 120g":1,"Animal Style Poutine (BACON)":1,"Animal Style Poutine (BONGGA)":1,"BURGER STEAK (BACON)":1,"BURGER STEAK (BONGGA)":1},
+  "Egg": {"BxLongganisa QTR":1,"BURGER STEAK (BACON)":1,"BURGER STEAK (BONGGA)":1},
+  "Sinandomeng Rice": {"BURGER STEAK (BACON)":85,"BURGER STEAK (BONGGA)":85},
+  "Rice Meal Take Out Container": {"BURGER STEAK (BACON)":1,"BURGER STEAK (BONGGA)":1}
+};
+const PAYMENTS = ["Cash","GCash","GoTyme"];
+const PURCHASE_CATEGORIES = ["Protein","Vegetables","Dairy","Condiments","Packaging","Buns","Supplies","Transport","Pop Up Fee","Other"];
+const PURCHASE_SUPPLIERS = ["Anthropic","Aria's Cheese Store","Best Value (Libis)","CCF Makati","CDO Food Store Cubao","Cuptain Events","Ever Gotesco","FB Marketplace","Facebook Market Place","Farmer's Cubao","Foothold Reality","Gas","Kenneth Dela Cruz","Kian Monte","Laser Digital Printing","Liberty Print Store","Lucy Nyl","Manors Store","Marketplace Capitol","N/A","Packaging Lab PH","Pandoy's Garage","Parking","Patrick Abunales","Pickaroo","Rafa (DocZ)","Robinson's Eastwood","Suki Market (Mayon)","The Baker's Choice","The Meat District PH","Thomas Murillo","Tijel's Homemade","True Value","Vista Supreme Food Supply"];
+const STORAGE_KEY = "beefx-website-v1";
+const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzvJrKTpjKHptA7Ogp2izxttC6zJwhZkaTDYfbGgUQ50wwPyX_bOV4EK3EfVKS6hzUjWQ/exec"; // <-- Paste your Google Apps Script Web App URL between these quotes, then use the "Generate configured copy" button on Setup to bake it in permanently.
+const EQUIPMENT_SUPPLIERS = ["FB Marketplace","Lazada","MK Kitchen","Town Gas"];
+const HISTORICAL_PURCHASES = [
+  {item:'Aviko Fries (10kg)',from:'Vista Supreme Food Supply',date:'2026-07-28',category:'Vegetables',price:1100.0,delivery:269.0},
+  {item:'Roger\'s Real Eggy Mayo (4 Tubs)',from:'Pandoy\'s Garage',date:'2026-07-28',category:'Condiments',price:3400.0,delivery:0},
+  {item:'Ayala Fairview Terraces Fee',from:'Kenneth Dela Cruz',date:'2026-07-28',category:'Pop Up Fee',price:1000.0,delivery:0},
+  {item:'Heavy Duty Extension',from:'Facebook Market Place',date:'2026-07-28',category:'Supplies',price:3000.0,delivery:113.0},
+  {item:'Romaine Lettuce (1kg)',from:'Farmer\'s Cubao',date:'2026-07-28',category:'Vegetables',price:262.5,delivery:0},
+  {item:'White Onion (1kg)',from:'Farmer\'s Cubao',date:'2026-07-28',category:'Vegetables',price:204.0,delivery:0},
+  {item:'Hinge Cup (100 pcs)',from:'Farmer\'s Cubao',date:'2026-07-28',category:'Packaging',price:190.0,delivery:0},
+  {item:'Plastic Fork (150 pcs)',from:'Farmer\'s Cubao',date:'2026-07-28',category:'Packaging',price:120.0,delivery:0},
+  {item:'Paper Towel',from:'Farmer\'s Cubao',date:'2026-07-28',category:'Supplies',price:120.0,delivery:0},
+  {item:'Aluminum Foil',from:'Farmer\'s Cubao',date:'2026-07-28',category:'Packaging',price:650.0,delivery:0},
+  {item:'Disposable Gloves',from:'Farmer\'s Cubao',date:'2026-07-28',category:'Supplies',price:120.0,delivery:194.0},
+  {item:'Clamshell Burger Box (500 pcs)',from:'Packaging Lab PH',date:'2026-07-28',category:'Packaging',price:3000.0,delivery:192.0},
+  {item:'90/10 Ground Beef (5kg)',from:'The Meat District PH',date:'2026-07-28',category:'Protein',price:1200.0,delivery:113.0},
+  {item:'CDO Bacon Bits (5kg)',from:'CDO Food Store Cubao',date:'2026-07-28',category:'Protein',price:1311.0,delivery:113.0},
+  {item:'Basil Leaves',from:'Suki Market (Mayon)',date:'2026-07-29',category:'Vegetables',price:500.0,delivery:0},
+  {item:'TopChef Instant Gravy Mix',from:'Best Value (Libis)',date:'2026-07-30',category:'Condiments',price:475.0,delivery:0},
+  {item:'Che Vital Cheese Slices (144 pcs)',from:'Best Value (Libis)',date:'2026-07-30',category:'Dairy',price:872.0,delivery:0},
+  {item:'Palm Oil (Frying Oil)',from:'Best Value (Libis)',date:'2026-07-30',category:'Supplies',price:429.0,delivery:214.0},
+  {item:'Gas for van (Manors to Terraces)',from:'Gas',date:'2026-07-30',category:'Transport',price:1000.0,delivery:0},
+  {item:'Gas for van (Manors to Terraces)',from:'Gas',date:'2026-08-02',category:'Transport',price:1000.0,delivery:0},
+  {item:'Parking for Van',from:'Parking',date:'2026-08-01',category:'Transport',price:70.0,delivery:0},
+  {item:'Romain Lettuce (Marketplace)',from:'Marketplace Capitol',date:'2026-08-02',category:'Vegetables',price:71.2,delivery:0},
+  {item:'Romain Lettuce (Marketplace)',from:'Marketplace Capitol',date:'2026-08-02',category:'Vegetables',price:95.63,delivery:0},
+  {item:'White Onino (Marketplace)',from:'Marketplace Capitol',date:'2026-08-02',category:'Vegetables',price:65.27,delivery:0},
+  {item:'McCormick Prepared Mustard',from:'Marketplace Capitol',date:'2026-08-02',category:'Condiments',price:97.75,delivery:0},
+  {item:'Paper Towel (Interfolded)',from:'Marketplace Capitol',date:'2026-08-02',category:'Supplies',price:200.0,delivery:0},
+  {item:'UFC Palm Oil',from:'Marketplace Capitol',date:'2026-08-02',category:'Condiments',price:250.0,delivery:0},
+  {item:'Marby\'s Burger Buns',from:'Ever Gotesco',date:'2026-08-02',category:'Buns',price:468.0,delivery:239.0},
+  {item:'Burger Buns (90 Pcs)',from:'Tijel\'s Homemade',date:'2026-08-04',category:'Buns',price:825.0,delivery:300.0},
+  {item:'Longganisa Tester (Hamonado, Bongga R&D)',from:'Patrick Abunales',date:'2026-08-06',category:'Protein',price:90.0,delivery:142.0},
+  {item:'Longganisa 5kg (Hamonado, Bongga R&D)',from:'Patrick Abunales',date:'2026-08-07',category:'Protein',price:1450.0,delivery:167.0},
+  {item:'White Onion (2pcs)',from:'Manors Store',date:'2026-08-08',category:'Vegetables',price:30.0,delivery:0},
+  {item:'Withdraw for personal funds',from:'N/A',date:'2026-08-08',category:'Other',price:1810.0,delivery:0},
+  {item:'Black Gloves (100 pcs)',from:'Farmer\'s Cubao',date:'2026-08-10',category:'Supplies',price:250.0,delivery:0},
+  {item:'Burger Plastic (300 pcs)',from:'Farmer\'s Cubao',date:'2026-08-10',category:'Supplies',price:90.0,delivery:0},
+  {item:'Plastic Gloves (100 pcs)',from:'Farmer\'s Cubao',date:'2026-08-10',category:'Supplies',price:50.0,delivery:0},
+  {item:'Aluminum Foil',from:'Farmer\'s Cubao',date:'2026-08-10',category:'Supplies',price:450.0,delivery:0},
+  {item:'RE 1600 (5 pcs)',from:'Farmer\'s Cubao',date:'2026-08-10',category:'Supplies',price:85.0,delivery:0},
+  {item:'CDO Bacon Bits (10 kg)',from:'CDO Food Store Cubao',date:'2026-08-10',category:'Protein',price:2622.0,delivery:0},
+  {item:'Che Vital Cheese Slices (216 pcs)',from:'Best Value (Libis)',date:'2026-08-10',category:'Dairy',price:1245.0,delivery:0},
+  {item:'Table Napkin (Pre-Folded)',from:'Best Value (Libis)',date:'2026-08-10',category:'Supplies',price:140.0,delivery:0},
+  {item:'Instant Gravy Mix (TopChef)',from:'Best Value (Libis)',date:'2026-08-10',category:'Condiments',price:475.0,delivery:0},
+  {item:'McCormick Prepared Mustard (x2)',from:'Best Value (Libis)',date:'2026-08-10',category:'Condiments',price:206.0,delivery:0},
+  {item:'Aviko Fries (10kg)',from:'Vista Supreme Food Supply',date:'2026-08-10',category:'Vegetables',price:1100.0,delivery:150.0},
+  {item:'BeefX Stickers (Logo, Bacon, Longganisa)',from:'Liberty Print Store',date:'2026-08-10',category:'Packaging',price:1300.0,delivery:150.0},
+  {item:'Burger Buns (90 Pcs)',from:'Tijel\'s Homemade',date:'2026-08-10',category:'Buns',price:825.0,delivery:0},
+  {item:'90/10 Ground Beef (10kg)',from:'The Meat District PH',date:'2026-08-10',category:'Protein',price:2400.0,delivery:150.0},
+  {item:'Donation to Kuya Tom Morillo',from:'N/A',date:'2026-08-10',category:'Other',price:1000.0,delivery:0},
+  {item:'Personal Withdraw of Funds',from:'Rafa (DocZ)',date:'2026-08-16',category:'Other',price:4400.0,delivery:0},
+  {item:'Eastwood City Pop Up Fee',from:'Cuptain Events',date:'2026-08-24',category:'Pop Up Fee',price:5000.0,delivery:0},
+  {item:'Medium Take Out Bag (100 pcs)',from:'Packaging Lab PH',date:'2026-08-24',category:'Packaging',price:240.0,delivery:117.0},
+  {item:'Kraft Bowl with Lid 500 mL (50 pcs)',from:'Packaging Lab PH',date:'2026-08-24',category:'Packaging',price:575.0,delivery:0},
+  {item:'Small Take Out Bag (300 pcs)',from:'Packaging Lab PH',date:'2026-08-24',category:'Packaging',price:360.0,delivery:0},
+  {item:'Mozarella Cheese (2kg)',from:'Aria\'s Cheese Store',date:'2026-08-24',category:'Dairy',price:935.0,delivery:134.0},
+  {item:'90/10 Ground Beef (5kg)',from:'The Meat District PH',date:'2026-08-25',category:'Protein',price:1200.0,delivery:173.0},
+  {item:'Griddle Cleaning Supplies',from:'True Value',date:'2026-08-21',category:'Supplies',price:941.0,delivery:0},
+  {item:'Sintra Board + Standee Print',from:'Kian Monte',date:'2026-08-27',category:'Other',price:1359.0,delivery:102.0},
+  {item:'UPTC Pop-Up Fee (Down Payment)',from:'Lucy Nyl',date:'2026-08-27',category:'Pop Up Fee',price:3000.0,delivery:0},
+  {item:'Bounty Fresh (24 pcs egg)',from:'Marketplace Capitol',date:'2026-08-27',category:'Protein',price:284.0,delivery:0},
+  {item:'SInandomeng Rice (5kg)',from:'Marketplace Capitol',date:'2026-08-27',category:'Other',price:410.0,delivery:0},
+  {item:'White Onion',from:'Marketplace Capitol',date:'2026-08-27',category:'Vegetables',price:203.84,delivery:0},
+  {item:'Trash Bag',from:'Marketplace Capitol',date:'2026-08-27',category:'Supplies',price:149.0,delivery:0},
+  {item:'Minced Garlic',from:'Marketplace Capitol',date:'2026-08-27',category:'Vegetables',price:19.0,delivery:0},
+  {item:'Palm Oil (Frying Oil, 4L)',from:'Marketplace Capitol',date:'2026-08-27',category:'Other',price:496.0,delivery:0},
+  {item:'1.5kg lettuce + balance',from:'Farmer\'s Cubao',date:'2026-08-28',category:'Vegetables',price:2592.0,delivery:134.0},
+  {item:'Burger Buns (90 Pcs)',from:'Tijel\'s Homemade',date:'2026-08-28',category:'Buns',price:925.0,delivery:151.0},
+  {item:'BeefX Stickers + Sintra Boards + T or D Cards',from:'Laser Digital Printing',date:'2026-09-02',category:'Packaging',price:1250.0,delivery:102.0},
+  {item:'2kg Mozarella Cheese',from:'Aria\'s Cheese Store',date:'2026-09-02',category:'Dairy',price:935.0,delivery:93.0},
+  {item:'Che Vital Quick Melt (2 packs of 72 pcs)',from:'The Baker\'s Choice',date:'2026-09-02',category:'Dairy',price:980.0,delivery:0},
+  {item:'Aviko Fries (10kg)',from:'Vista Supreme Food Supply',date:'2026-09-02',category:'Other',price:1100.0,delivery:282.0},
+  {item:'Clamshell Burger Box (500 pcs)',from:'Packaging Lab PH',date:'2026-09-02',category:'Packaging',price:3000.0,delivery:117.0},
+  {item:'Claude AI Subscription',from:'Anthropic',date:'2026-09-03',category:'Other',price:1413.4,delivery:0},
+  {item:'Robinson\'s Eastwood Run',from:'Robinson\'s Eastwood',date:'2026-09-03',category:'Other',price:371.5,delivery:0},
+  {item:'Tiffany Burger Buns',from:'Pickaroo',date:'2026-09-05',category:'Buns',price:1170.0,delivery:0},
+  {item:'Bacon Bits (5kg)',from:'CDO Food Store Cubao',date:'2026-09-05',category:'Protein',price:1311.0,delivery:138.0},
+  {item:'Roger\'s Real Eggy Mayo (2 Tubs)',from:'Pandoy\'s Garage',date:'2026-09-05',category:'Condiments',price:1700.0,delivery:180.0},
+  {item:'90/10 Ground Beef (5kg)',from:'The Meat District PH',date:'2026-09-05',category:'Protein',price:825.0,delivery:129.0},
+  {item:'Aviko Fries (10kg)',from:'FB Marketplace',date:'2026-09-05',category:'Vegetables',price:1200.0,delivery:219.0},
+  {item:'500g Basil',from:'Farmer\'s Cubao',date:'2026-09-05',category:'Vegetables',price:750.0,delivery:0},
+  {item:'Robinson\'s Eastwood Run',from:'Robinson\'s Eastwood',date:'2026-09-06',category:'Other',price:873.16,delivery:0},
+  {item:'Maginahwa Pop-Up Fee (50%)',from:'Foothold Reality',date:'2026-09-06',category:'Pop Up Fee',price:3750.0,delivery:0},
+  {item:'Sam Salary (4 Days)',from:'N/A',date:'2026-09-06',category:'Other',price:4150.0,delivery:0},
+  {item:'Darren Salary (3 Days)',from:'N/A',date:'2026-09-06',category:'Other',price:3000.0,delivery:0},
+  {item:'Tithes for Eastwood Pop Up',from:'CCF Makati',date:'2026-09-07',category:'Other',price:2500.0,delivery:0},
+  {item:'Tithes for Eastwood Pop Up (Financial Aid)',from:'Thomas Murillo',date:'2026-09-07',category:'Other',price:1500.0,delivery:0},
+  {item:'4kg Mozarella Cheese',from:'Aria\'s Cheese Store',date:'2026-09-08',category:'Dairy',price:1860.0,delivery:102.0},
+  {item:'Aviko Fries (10kg)',from:'Vista Supreme Food Supply',date:'2026-09-08',category:'Other',price:1100.0,delivery:0},
+  {item:'Che Vital Quick Melt (6 packs of 72 pcs)',from:'The Baker\'s Choice',date:'2026-09-08',category:'Dairy',price:2340.0,delivery:160.0},
+  {item:'Roger\'s Real Eggy Mayo (4 Tubs)',from:'Pandoy\'s Garage',date:'2026-09-08',category:'Condiments',price:3400.0,delivery:196.0},
+  {item:'Basil Leaves (1kg)',from:'FB Marketplace',date:'2026-09-08',category:'Vegetables',price:970.0,delivery:219.0},
+  {item:'Longganisa Hamonado (5kg)',from:'Patrick Abunales',date:'2026-09-08',category:'Protein',price:1450.0,delivery:289.0},
+  {item:'90/10 Ground Beef (10kg)',from:'The Meat District PH',date:'2026-09-08',category:'Protein',price:2400.0,delivery:0},
+  {item:'Bacon Bits (10kg)',from:'CDO Food Store Cubao',date:'2026-09-08',category:'Protein',price:2755.0,delivery:0},
+  {item:'Burger Buns (180 pcs)',from:'Tijel\'s Homemade',date:'2026-09-09',category:'Buns',price:1650.0,delivery:330.0}
+];
+const HISTORICAL_EQUIPMENT = [
+  {name:'15x27 Gas Griddle',from:'FB Marketplace',date:'2026-04-21',price:3350.0,delivery:0},
+  {name:'Sheet Tray (x2)',from:'MK Kitchen',date:'2026-04-21',price:450.0,delivery:0},
+  {name:'Whisk',from:'MK Kitchen',date:'2026-04-21',price:180.0,delivery:0},
+  {name:'Thermometer',from:'MK Kitchen',date:'2026-04-21',price:170.0,delivery:0},
+  {name:'Kitchen Timer',from:'MK Kitchen',date:'2026-04-21',price:155.0,delivery:0},
+  {name:'Spatula (x2)',from:'MK Kitchen',date:'2026-04-21',price:170.0,delivery:0},
+  {name:'Bain Marie',from:'MK Kitchen',date:'2026-04-21',price:140.0,delivery:0},
+  {name:'Mixing Bowl',from:'MK Kitchen',date:'2026-04-21',price:320.0,delivery:0},
+  {name:'Collapsible Tent',from:'FB Marketplace',date:'2026-04-22',price:1400.0,delivery:400.0},
+  {name:'Gas',from:'Town Gas',date:'2026-04-22',price:1500.0,delivery:0},
+  {name:'Gas Tank Hose',from:'Town Gas',date:'2026-04-22',price:300.0,delivery:0},
+  {name:'Gas Tank Regulator',from:'Town Gas',date:'2026-04-22',price:300.0,delivery:0},
+  {name:'Measuring Scale',from:'FB Marketplace',date:'2026-04-19',price:800.0,delivery:96.0},
+  {name:'Egg Molder (2 pcs)',from:'MK Kitchen',date:'2026-08-10',price:130.0,delivery:0},
+  {name:'Oil Strainer (Spider)',from:'MK Kitchen',date:'2026-08-10',price:70.0,delivery:0},
+  {name:'Griddle Spatula Holder',from:'Lazada',date:'2026-08-24',price:166.0,delivery:0},
+  {name:'Griddle Scraper',from:'Lazada',date:'2026-08-24',price:281.0,delivery:0}
+];
+
+/* ===================== STATE ===================== */
+function defaultPurchaseLog(){
+  return HISTORICAL_PURCHASES.map(p=>({
+    id: uid("pu"), item:p.item, from:p.from, date:p.date, category:p.category,
+    price:p.price, delivery:p.delivery, linkedItem:null, qtyReceived:0
+  }));
+}
+function defaultEquipmentLog(){
+  return HISTORICAL_EQUIPMENT.map(e=>({
+    id: uid("eq"), name:e.name, from:e.from, date:e.date, price:e.price, delivery:e.delivery,
+    status:"Active", location:"Home", notes:""
+  }));
+}
+let state = {
+  itemOverrides: {},      // name -> {price,amt,unit,threshold,manualAdjustment,servingsPerBatch}
+  portionOverrides: {},   // "item|||product" -> qty
+  priceOverrides: {},     // product -> price
+  customItems: [],        // user-added inventory items: {name,price,amt,unit}
+  equipmentLog: defaultEquipmentLog(),
+  purchaseLog: defaultPurchaseLog(),
+  sauceLog: [],
+  popupEvents: [],
+  venues: [],
+  view: "home",
+  currentEventId: null,
+  currentDayId: null,
+  pendingProduct: null,
+  currentVenueId: null,
+  venuesView: "list"
+};
+let isWriting=false, lastLocalWrite=0, pollTimer=null;
+let syncStatus = { state:"idle", lastSavedAt:null, lastError:null, lastLoadedAt:null };
+
+function updateSyncBadge(){
+  const el = document.getElementById("sync-badge");
+  if(!el) return;
+  if(syncStatus.state==="saving"){ el.textContent="saving..."; el.style.color="#FFD100"; }
+  else if(syncStatus.state==="error"){ el.textContent="save failed — tap to retry"; el.style.color="#E86A54"; }
+  else if(syncStatus.lastSavedAt){ el.textContent="saved "+timeAgo(syncStatus.lastSavedAt); el.style.color="#8FCB9E"; }
+  else { el.textContent="not yet saved"; el.style.color="#aaa"; }
+}
+function timeAgo(ts){
+  const s = Math.floor((Date.now()-ts)/1000);
+  if(s<5) return "just now";
+  if(s<60) return s+"s ago";
+  const m = Math.floor(s/60);
+  if(m<60) return m+"m ago";
+  return Math.floor(m/60)+"h ago";
+}
+
+async function loadData(isInitial){
+  if(!APPS_SCRIPT_URL) return false;
+  try{
+    const res = await fetch(APPS_SCRIPT_URL, {method:"GET"});
+    if(!res.ok) throw new Error("HTTP "+res.status);
+    const p = await res.json();
+    if(p && typeof p==="object" && Object.keys(p).length>0){
+      state.itemOverrides = p.itemOverrides||{};
+      state.portionOverrides = p.portionOverrides||{};
+      state.priceOverrides = p.priceOverrides||{};
+      state.customItems = p.customItems||[];
+      // Only replace the logs with server data if the server actually has something —
+      // this protects the built-in historical defaults on a genuinely first-ever load.
+      if(Array.isArray(p.equipmentLog) && p.equipmentLog.length>0) state.equipmentLog = p.equipmentLog;
+      if(Array.isArray(p.purchaseLog) && p.purchaseLog.length>0) state.purchaseLog = p.purchaseLog;
+      state.sauceLog = p.sauceLog||[];
+      state.popupEvents = p.popupEvents||[];
+      state.venues = p.venues||[];
+      syncStatus.lastLoadedAt = Date.now();
+    }
+    return true;
+  }catch(e){
+    // A failed read must never reset state — that is what caused the earlier data-loss
+    // bug. Leave whatever is already in memory exactly as it is and just report it.
+    return false;
+  }
+}
+async function saveData(){
+  if(!APPS_SCRIPT_URL){ showToast("Set up your Google Sheet connection first — see Setup"); return false; }
+  isWriting=true;
+  syncStatus.state="saving"; updateSyncBadge();
+  try{
+    const res = await fetch(APPS_SCRIPT_URL, {
+      method:"POST",
+      headers:{"Content-Type":"text/plain;charset=utf-8"}, // avoids a CORS preflight to Apps Script
+      body: JSON.stringify({
+        itemOverrides:state.itemOverrides, portionOverrides:state.portionOverrides, priceOverrides:state.priceOverrides,
+        customItems:state.customItems, equipmentLog:state.equipmentLog, purchaseLog:state.purchaseLog, sauceLog:state.sauceLog,
+        popupEvents:state.popupEvents, venues:state.venues
+      })
+    });
+    if(!res.ok) throw new Error("HTTP "+res.status);
+    lastLocalWrite=Date.now();
+    syncStatus.state="idle"; syncStatus.lastSavedAt=Date.now(); syncStatus.lastError=null;
+    updateSyncBadge();
+    return true;
+  }catch(e){
+    syncStatus.state="error"; syncStatus.lastError=String(e && e.message || e);
+    updateSyncBadge();
+    showToast("Save failed — tap the status badge at the top to retry");
+    return false;
+  } finally {
+    isWriting=false;
+  }
+}
+async function retrySave(){
+  showToast("Retrying save...");
+  await saveData();
+}
+async function pollForUpdates(){
+  if(document.querySelector(".overlay")) return;
+  if(isWriting) return;
+  if(Date.now()-lastLocalWrite<3000) return;
+  const prev = JSON.stringify(state);
+  const ok = await loadData(false);
+  if(!ok) return;
+  if(JSON.stringify(state)!==prev) render();
+}
+
+function showToast(m){ const t=document.getElementById("toast"); t.textContent=m; t.classList.add("show"); setTimeout(()=>t.classList.remove("show"),1500); }
+function uid(p){ return p+"_"+Date.now()+"_"+Math.floor(Math.random()*1000); }
+function money(n){ return "₱"+Math.round(n).toLocaleString(); }
+function fmt(n,unit){ const r=Math.round((n||0)*100)/100; return r+(unit?" "+unit:""); }
+function escapeHtml(s){ if(s===undefined||s===null) return ""; return String(s).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m])); }
+
+/* ===================== CORE COSTING ENGINE (mirrors the sheet's SUMPRODUCT) ===================== */
+function getAllItems(){ return [...ITEM_DEFS, ...state.customItems]; }
+function itemCfg(name){
+  const def = getAllItems().find(i=>i.name===name) || {price:0,amt:1,unit:""};
+  const ov = state.itemOverrides[name]||{};
+  return { price: ov.price!==undefined?ov.price:def.price, amt: ov.amt!==undefined?ov.amt:def.amt, unit: ov.unit!==undefined?ov.unit:def.unit };
+}
+function getPortion(item,product){
+  const key=item+"|||"+product;
+  if(state.portionOverrides[key]!==undefined) return state.portionOverrides[key];
+  if(item==="**Awesome Sauce" && (product==="BxBacon QTR"||product==="BxLongganisa QTR")){
+    return awesomeSaucePerBurger();
+  }
+  return (BASE_PORTIONS[item] && BASE_PORTIONS[item][product]) || 0;
+}
+function awesomeSauceServingsPerBatch(){
+  const ov = state.itemOverrides["**Awesome Sauce"]||{};
+  return ov.servingsPerBatch!==undefined ? ov.servingsPerBatch : 175;
+}
+function awesomeSaucePerBurger(){
+  const cfg = itemCfg("**Awesome Sauce");
+  const servings = awesomeSauceServingsPerBatch();
+  return servings>0 ? cfg.amt/servings : 0;
+}
+function baseProductCost(product){
+  let total=0;
+  ITEM_DEFS.forEach(it=>{
+    const portion = getPortion(it.name, product);
+    if(portion>0){ const cfg=itemCfg(it.name); total += portion * (cfg.price/cfg.amt); }
+  });
+  return total;
+}
+function productCost(product){
+  const combo = COMBOS.find(c=>c.name===product);
+  if(combo) return combo.parts.reduce((a,p)=>a+baseProductCost(p),0);
+  return baseProductCost(product);
+}
+function sellPrice(product){
+  if(state.priceOverrides[product]!==undefined) return state.priceOverrides[product];
+  const combo = COMBOS.find(c=>c.name===product);
+  if(combo) return combo.defaultPrice;
+  const def = PRODUCT_DEFS.find(p=>p.name===product);
+  return def ? def.defaultPrice : 0;
+}
+function productLabel(product){
+  const combo = COMBOS.find(c=>c.name===product);
+  if(combo) return combo.label;
+  const def = PRODUCT_DEFS.find(p=>p.name===product);
+  return def ? def.label : product;
+}
+function sellableProducts(){
+  return [...PRODUCT_DEFS.filter(p=>p.sellable).map(p=>p.name), ...COMBOS.map(c=>c.name)];
+}
+function expandForDeduction(product){ // returns array of base product names to deduct ingredients for
+  const combo = COMBOS.find(c=>c.name===product);
+  return combo ? combo.parts : [product];
+}
+
+/* ===================== INVENTORY ===================== */
+function currentStock(name){
+  const cfg = itemCfg(name);
+  let stock = 0;
+  state.purchaseLog.filter(p=>p.linkedItem===name && p.qtyReceived).forEach(p=> stock += Number(p.qtyReceived));
+  state.popupEvents.forEach(ev=>ev.days.forEach(d=>d.entries.forEach(en=>{
+    const q = en.qty||1;
+    expandForDeduction(en.product).forEach(base=>{
+      stock -= getPortion(name, base) * q;
+    });
+  })));
+  if(name==="**Awesome Sauce") stock += state.sauceLog.reduce((a,s)=>a+Number(s.yield||0),0);
+  if(name==="Mayonnaise") stock -= state.sauceLog.reduce((a,s)=>a+Number(s.mayoUsed||0),0);
+  if(name==="Fresh Basil") stock -= state.sauceLog.reduce((a,s)=>a+Number(s.basilUsed||0),0);
+  if(name==="Black Pepper - Ground") stock -= state.sauceLog.reduce((a,s)=>a+Number(s.pepperUsed||0),0);
+  stock += itemManualAdjustment(name);
+  return stock;
+}
+function itemThreshold(name){
+  const ov = state.itemOverrides[name]||{};
+  return ov.threshold!==undefined ? ov.threshold : 0;
+}
+function itemManualAdjustment(name){
+  const ov = state.itemOverrides[name]||{};
+  return ov.manualAdjustment!==undefined ? ov.manualAdjustment : 0;
+}
+function reorderList(){
+  return getAllItems().filter(i=>{
+    const th=itemThreshold(i.name);
+    return th>0 && currentStock(i.name)<=th;
+  });
+}
+
+/* ===================== HEADER / NAV ===================== */
+const TABS = [
+  {v:"costing", l:"Costing"},
+  {v:"inventory", l:"Inventory"},
+  {v:"popup", l:"Pop-Up Tracker"},
+  {v:"venues", l:"Venue Analysis"},
+  {v:"equipment", l:"Equipment"},
+  {v:"purchasing", l:"Purchasing"},
+  {v:"dashboard", l:"Dashboard"}
+];
+function renderHeader(){
+  const h=document.getElementById("header");
+  h.innerHTML = `
+    <div style="display:flex; align-items:center; justify-content:space-between;">
+      <div class="brand" id="home-btn" style="cursor:pointer;"><div class="beef"><span>BEEF</span></div><span class="x">X</span></div>
+      <button id="sync-badge" style="background:none;border:none;font-size:10.5px;color:#aaa;cursor:pointer;padding:4px 8px;"></button>
+    </div>
+    <div class="navtabs" id="navtabs">
+      <button data-v="home" style="${state.view==='home'?'':''}">Home</button>
+      ${TABS.map(t=>`<button data-v="${t.v}">${t.l}</button>`).join("")}
+    </div>
+  `;
+  h.querySelectorAll("#navtabs button").forEach(b=>{
+    b.classList.toggle("active", b.getAttribute("data-v")===state.view);
+    b.addEventListener("click", ()=>{ state.view=b.getAttribute("data-v"); render(); });
+  });
+  document.getElementById("home-btn").addEventListener("click", ()=>{ state.view="home"; render(); });
+  document.getElementById("sync-badge").addEventListener("click", retrySave);
+  updateSyncBadge();
+}
+function render(){
+  renderHeader();
+  const main=document.getElementById("main");
+  if(state.view==="home") return renderHome(main);
+  if(state.view==="costing") return renderCosting(main);
+  if(state.view==="inventory") return renderInventory(main);
+  if(state.view==="popup") return renderPopup(main);
+  if(state.view==="venues") return renderVenues(main);
+  if(state.view==="equipment") return renderEquipment(main);
+  if(state.view==="purchasing") return renderPurchasing(main);
+  if(state.view==="dashboard") return renderDashboard(main);
+}
+
+/* ===================== HOME LANDING PAGE ===================== */
+function renderHome(main){
+  let salesRevenue=0, itemsSold=0;
+  state.popupEvents.forEach(ev=>{ const t=eventTotals(ev); salesRevenue+=t.revenue; itemsSold+=t.count; });
+  const reorders = reorderList();
+  const totalPurchases = state.purchaseLog.reduce((a,p)=>a+Number(p.price||0)+Number(p.delivery||0),0);
+  const totalEquipment = state.equipmentLog.reduce((a,e)=>a+Number(e.price||0)+Number(e.delivery||0),0);
+
+  let html = `<div class="card" style="text-align:center;padding:20px 14px;">
+    <p style="font-size:15px;font-weight:800;margin:0 0 4px;">Welcome back to BeefX Operations</p>
+    <p style="font-size:11.5px;color:#888;margin:0;">Everything below is saved automatically and synced across every device using this link.</p>
+  </div>`;
+
+  html += `<div class="stat-row">
+    <div class="stat"><p class="n">${money(salesRevenue)}</p><p class="l">Total pop-up revenue</p></div>
+    <div class="stat"><p class="n">${itemsSold}</p><p class="l">Items sold, all-time</p></div>
+    <div class="stat"><p class="n">${money(totalPurchases)}</p><p class="l">Total purchases logged</p></div>
+    <div class="stat"><p class="n">${money(totalEquipment)}</p><p class="l">Equipment invested</p></div>
+  </div>`;
+
+  if(reorders.length>0){
+    html += `<div class="alert-banner"><p>${reorders.length} inventory item${reorders.length===1?"":"s"} need reordering</p>
+      <div class="items">${reorders.map(i=>escapeHtml(i.name)).join(", ")}</div></div>`;
+  }
+
+  html += `<h2 class="sectitle">Jump to a section</h2><div class="prodgrid">
+    ${TABS.map(t=>`<button class="prodbtn" data-goto="${t.v}"><span class="pname">${escapeHtml(t.l)}</span></button>`).join("")}
+  </div>`;
+
+  html += `<h2 class="sectitle">Backup and restore</h2>
+  <div class="card">
+    <p class="helptext">Every entry saves automatically to shared storage the moment you make it — this is just an extra safety copy. Download a backup file anytime, or restore from one if you ever need to.</p>
+    <div style="display:flex;gap:8px;">
+      <button class="btn full" id="export-btn">Download backup (.json)</button>
+      <button class="btn full" id="import-btn">Restore from backup</button>
+    </div>
+    <input type="file" id="import-file" accept="application/json" style="display:none;">
+  </div>`;
+
+  main.innerHTML = html;
+  main.querySelectorAll("[data-goto]").forEach(b=>{
+    b.addEventListener("click", ()=>{ state.view=b.getAttribute("data-goto"); render(); });
+  });
+  document.getElementById("export-btn").addEventListener("click", exportBackup);
+  document.getElementById("import-btn").addEventListener("click", ()=> document.getElementById("import-file").click());
+  document.getElementById("import-file").addEventListener("change", importBackup);
+}
+function exportBackup(){
+  const data = {
+    itemOverrides:state.itemOverrides, portionOverrides:state.portionOverrides, priceOverrides:state.priceOverrides,
+    customItems:state.customItems, equipmentLog:state.equipmentLog, purchaseLog:state.purchaseLog, sauceLog:state.sauceLog,
+    popupEvents:state.popupEvents, venues:state.venues, exportedAt:new Date().toISOString()
+  };
+  const blob = new Blob([JSON.stringify(data,null,2)], {type:"application/json"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = "beefx-backup-"+new Date().toISOString().slice(0,10)+".json";
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast("Backup downloaded");
+}
+function importBackup(e){
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = async (ev)=>{
+    try{
+      const p = JSON.parse(ev.target.result);
+      state.itemOverrides = p.itemOverrides||{};
+      state.portionOverrides = p.portionOverrides||{};
+      state.priceOverrides = p.priceOverrides||{};
+      state.customItems = p.customItems||[];
+      state.equipmentLog = p.equipmentLog||state.equipmentLog;
+      state.purchaseLog = p.purchaseLog||state.purchaseLog;
+      state.sauceLog = p.sauceLog||[];
+      state.popupEvents = p.popupEvents||[];
+      state.venues = p.venues||[];
+      const ok = await saveData();
+      if(ok){ showToast("Backup restored"); render(); }
+    }catch(err){ showToast("That file couldn't be read — check it's a BeefX backup file"); }
+  };
+  reader.readAsText(file);
+}
+
+/* ===================== COSTING TAB ===================== */
+function renderCosting(main){
+  let html = `<div class="card"><h2 style="margin:0 0 4px;font-size:13px;">Product cost & pricing</h2>
+    <p class="helptext">Cost = sum of (portion used × price ÷ package amount) per ingredient — same formula as your sheet.</p>
+    <div class="tablewrap"><table><tr><th>Product</th><th style="text-align:right;">Food cost</th><th style="text-align:right;">Sell price</th><th style="text-align:right;">Margin</th></tr>`;
+  [...PRODUCT_DEFS, ...COMBOS].forEach(p=>{
+    const isCombo = !!COMBOS.find(c=>c.name===p.name);
+    if(!isCombo && !p.sellable) return;
+    const cost = productCost(p.name);
+    const price = sellPrice(p.name);
+    const margin = price>0 ? ((price-cost)/price*100) : 0;
+    html += `<tr>
+      <td>${escapeHtml(p.label)}</td>
+      <td class="num">${money(cost)}</td>
+      <td class="num"><input type="number" data-price="${escapeHtml(p.name)}" value="${price}" style="width:60px;"></td>
+      <td class="num" style="color:${margin>=0?'var(--grn)':'var(--red)'};">${margin.toFixed(0)}%</td>
+    </tr>`;
+  });
+  html += `</table></div></div>`;
+
+  const awesomeBatchCfg = itemCfg("**Awesome Sauce");
+  const awesomeServings = awesomeSauceServingsPerBatch();
+  const awesomePerBurger = awesomeSaucePerBurger();
+  html += `<div class="card"><h2 style="margin:0 0 4px;font-size:13px;">Awesome Sauce batch economics</h2>
+    <p class="helptext">One batch costs ${money(productCost("Awesome"))} and yields ${fmt(awesomeBatchCfg.amt,"g")}. Set how many burgers that batch covers — the per-burger portion below recalculates automatically instead of being a fixed number.</p>
+    <label class="field" style="margin-bottom:0;max-width:220px;"><span>Servings per batch</span>
+      <input type="number" id="awesome-servings" value="${awesomeServings}">
+    </label>
+    <p class="helptext" style="margin-top:8px;">→ ${fmt(awesomePerBurger,"g")} of Awesome Sauce per Siga/Bongga burger, used automatically in the recipe and in Inventory deduction.</p>
+  </div>`;
+
+  html += `<div class="card"><h2 style="margin:0 0 4px;font-size:13px;">In development (not yet sellable)</h2>
+    <div class="tablewrap"><table><tr><th>Item</th><th style="text-align:right;">Cost so far</th></tr>
+      <tr><td>BxSisig QTR patty</td><td class="num">${money(productCost("BxSisig QTR"))}</td></tr>
+      <tr><td>Sisig Sauce (reference, per batch)</td><td class="num">${money(productCost("Sisig"))}</td></tr>
+    </table></div>
+    <p class="helptext" style="margin-top:8px;">BxSisig is missing bun, cheese, condiments, and packaging in the recipe below — still incomplete.</p>
+  </div>`;
+
+  html += `<h2 class="sectitle">Ingredient master & recipe portions</h2>
+  <p class="helptext">Edit price, package size, unit, or any portion. Everything above recalculates instantly.</p>
+  <div class="card tablewrap">
+  <table><tr><th>Ingredient</th><th>Price ₱</th><th>Pkg amt</th><th>Unit</th>${sellableProducts().filter(p=>!COMBOS.find(c=>c.name===p)).map(p=>`<th>${escapeHtml(productLabel(p).split(" (")[0])}</th>`).join("")}</tr>`;
+  ITEM_DEFS.forEach(it=>{
+    const cfg = itemCfg(it.name);
+    html += `<tr>
+      <td>${escapeHtml(it.name)}</td>
+      <td><input type="number" data-icfg="${escapeHtml(it.name)}|price" value="${cfg.price}"></td>
+      <td><input type="number" data-icfg="${escapeHtml(it.name)}|amt" value="${cfg.amt}"></td>
+      <td><input type="text" data-icfg="${escapeHtml(it.name)}|unit" value="${escapeHtml(cfg.unit||"")}"></td>
+      ${sellableProducts().filter(p=>!COMBOS.find(c=>c.name===p)).map(p=>`<td><input type="number" data-portion="${escapeHtml(it.name)}|||${escapeHtml(p)}" value="${getPortion(it.name,p)}"></td>`).join("")}
+    </tr>`;
+  });
+  html += `</table></div>`;
+
+  main.innerHTML = html;
+  document.getElementById("awesome-servings").addEventListener("change", async e=>{
+    if(!state.itemOverrides["**Awesome Sauce"]) state.itemOverrides["**Awesome Sauce"]={};
+    const cfg = itemCfg("**Awesome Sauce");
+    state.itemOverrides["**Awesome Sauce"] = {price:cfg.price, amt:cfg.amt, unit:cfg.unit, threshold:(state.itemOverrides["**Awesome Sauce"]||{}).threshold, manualAdjustment:(state.itemOverrides["**Awesome Sauce"]||{}).manualAdjustment, servingsPerBatch: parseFloat(e.target.value)||175};
+    await saveData(); render();
+  });
+  main.querySelectorAll("input[data-price]").forEach(inp=>{
+    inp.addEventListener("change", async ()=>{
+      state.priceOverrides[inp.getAttribute("data-price")] = parseFloat(inp.value)||0;
+      await saveData(); render();
+    });
+  });
+  main.querySelectorAll("input[data-icfg]").forEach(inp=>{
+    inp.addEventListener("change", async ()=>{
+      const [name,field] = inp.getAttribute("data-icfg").split("|");
+      if(!state.itemOverrides[name]) state.itemOverrides[name]={};
+      const cfg = itemCfg(name);
+      state.itemOverrides[name] = { price:cfg.price, amt:cfg.amt, unit:cfg.unit, threshold:(state.itemOverrides[name]||{}).threshold };
+      state.itemOverrides[name][field] = field==="unit" ? inp.value : (parseFloat(inp.value)||0);
+      await saveData(); render();
+    });
+  });
+  main.querySelectorAll("input[data-portion]").forEach(inp=>{
+    inp.addEventListener("change", async ()=>{
+      state.portionOverrides[inp.getAttribute("data-portion")] = parseFloat(inp.value)||0;
+      await saveData(); render();
+    });
+  });
+}
+
+/* ===================== INVENTORY TAB ===================== */
+function renderInventory(main){
+  const reorders = reorderList();
+  let html="";
+  if(reorders.length>0){
+    html += `<div class="alert-banner"><p>${reorders.length} item${reorders.length===1?"":"s"} need reordering</p>
+      <div class="items">${reorders.map(i=>escapeHtml(i.name)).join(", ")}</div></div>`;
+  }
+  html += `<div class="card"><h2 style="margin:0 0 4px;font-size:13px;">Awesome Sauce prep log</h2>
+    <p class="helptext">Logging a batch adds to Awesome Sauce stock and deducts mayo, basil, and pepper automatically.</p>
+    <label class="field"><span>Date</span><input type="date" id="sauce-date" value="${new Date().toISOString().slice(0,10)}"></label>
+    <label class="field"><span>Batch yield (g)</span><input type="number" id="sauce-yield" placeholder="e.g. 3500"></label>
+    <label class="field"><span>Mayo used (g)</span><input type="number" id="sauce-mayo" placeholder="e.g. 3500"></label>
+    <label class="field"><span>Basil used (g)</span><input type="number" id="sauce-basil" placeholder="e.g. 250"></label>
+    <label class="field" style="margin-bottom:0;"><span>Pepper used (g)</span><input type="number" id="sauce-pepper" placeholder="e.g. 15"></label>
+    <button class="btn primary full" id="sauce-submit" style="margin-top:10px;">Log batch</button>
+  </div>`;
+
+  html += `<div class="card"><h2 style="margin:0 0 10px;font-size:13px;">Add a new inventory item</h2>
+    <p class="helptext">For packaging and supplies not in Costing — tissue, sporks, plastic gloves, etc.</p>
+    <label class="field"><span>Item name</span><input type="text" id="new-item-name" placeholder="e.g. Sporks"></label>
+    <label class="field"><span>Price (₱)</span><input type="number" id="new-item-price" placeholder="e.g. 120"></label>
+    <label class="field"><span>Package amount</span><input type="number" id="new-item-amt" placeholder="e.g. 150"></label>
+    <label class="field" style="margin-bottom:0;"><span>Unit</span>
+      <select id="new-item-unit">
+        <option value="pcs">pcs</option><option value="g">g</option><option value="kg">kg</option>
+        <option value="L">L</option><option value="mL">mL</option><option value="pack">pack</option>
+        <option value="__custom__">Custom...</option>
+      </select>
+    </label>
+    <label class="field" id="new-item-unit-custom-wrap" style="display:none;"><span>Custom unit</span><input type="text" id="new-item-unit-custom" placeholder="e.g. box"></label>
+    <button class="btn primary full" id="new-item-submit" style="margin-top:10px;">Add item</button>
+  </div>`;
+
+  html += `<div class="cattitle">Costing ingredients</div>`;
+  ITEM_DEFS.forEach(i=> html += itemRowHtml(i.name));
+  if(state.customItems.length>0){
+    html += `<div class="cattitle">Custom items</div>`;
+    state.customItems.forEach(i=> html += itemRowHtml(i.name, true));
+  }
+  main.innerHTML = html;
+
+  document.getElementById("sauce-submit").addEventListener("click", async ()=>{
+    const yieldV = parseFloat(document.getElementById("sauce-yield").value)||0;
+    if(yieldV<=0){ showToast("Enter a batch yield first"); return; }
+    state.sauceLog.push({
+      id: uid("sauce"), date: document.getElementById("sauce-date").value,
+      yield: yieldV, mayoUsed: parseFloat(document.getElementById("sauce-mayo").value)||0,
+      basilUsed: parseFloat(document.getElementById("sauce-basil").value)||0,
+      pepperUsed: parseFloat(document.getElementById("sauce-pepper").value)||0
+    });
+    await saveData(); showToast("Batch logged"); render();
+  });
+  document.getElementById("new-item-unit").addEventListener("change", e=>{
+    document.getElementById("new-item-unit-custom-wrap").style.display = e.target.value==="__custom__" ? "" : "none";
+  });
+  document.getElementById("new-item-submit").addEventListener("click", async ()=>{
+    const name = document.getElementById("new-item-name").value.trim();
+    if(!name){ showToast("Add an item name first"); return; }
+    if(getAllItems().find(i=>i.name===name)){ showToast("An item with that name already exists"); return; }
+    const unitSel = document.getElementById("new-item-unit").value;
+    const unit = unitSel==="__custom__" ? (document.getElementById("new-item-unit-custom").value.trim()||"pcs") : unitSel;
+    state.customItems.push({
+      name, price: parseFloat(document.getElementById("new-item-price").value)||0,
+      amt: parseFloat(document.getElementById("new-item-amt").value)||1, unit
+    });
+    await saveData(); showToast("Added "+name); render();
+  });
+  main.querySelectorAll(".item-row").forEach(row=>{
+    row.addEventListener("click", (e)=>{
+      if(e.target.closest(".li-del")) return;
+      showEditItemSheet(row.getAttribute("data-item"));
+    });
+  });
+  main.querySelectorAll(".li-del[data-custom]").forEach(b=>{
+    b.addEventListener("click", async (e)=>{
+      e.stopPropagation();
+      const name = b.getAttribute("data-custom");
+      state.customItems = state.customItems.filter(i=>i.name!==name);
+      delete state.itemOverrides[name];
+      await saveData(); render(); showToast("Removed "+name);
+    });
+  });
+}
+function itemRowHtml(name, deletable){
+  const stock = currentStock(name);
+  const th = itemThreshold(name);
+  const isLow = th>0 && stock<=th;
+  const cfg = itemCfg(name);
+  return `<div class="item-row" data-item="${escapeHtml(name)}">
+    <div class="top">
+      <div>
+        <div class="iname">${escapeHtml(name)}</div>
+        <div class="imeta">${fmt(stock,cfg.unit)} on hand${th>0?" · reorder at "+fmt(th,cfg.unit):" · no reorder threshold set"}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;">
+        <span class="badge ${th===0?'':(isLow?'reorder':'ok')}">${th===0?"NO ALERT":(isLow?"REORDER":"OK")}</span>
+        ${deletable?`<button class="li-del" data-custom="${escapeHtml(name)}">&times;</button>`:""}
+      </div>
+    </div>
+  </div>`;
+}
+function showEditItemSheet(name){
+  const cfg = itemCfg(name);
+  const th = itemThreshold(name);
+  const adj = itemManualAdjustment(name);
+  const autoStock = currentStock(name) - adj;
+  const overlay = document.createElement("div"); overlay.className="overlay";
+  overlay.innerHTML = `<div class="sheet">
+    <h3>${escapeHtml(name)}</h3>
+    <div class="tablewrap" style="margin-bottom:10px;"><table>
+      <tr><td>From purchases minus usage</td><td class="num">${fmt(autoStock,cfg.unit)}</td></tr>
+      <tr><td>Your manual adjustment</td><td class="num">${adj>=0?"+":""}${fmt(adj,cfg.unit)}</td></tr>
+      <tr><td style="font-weight:800;">Current on hand</td><td class="num" style="font-weight:800;">${fmt(currentStock(name),cfg.unit)}</td></tr>
+    </table></div>
+    <label class="field"><span>Manually set on-hand to (${escapeHtml(cfg.unit||"")})</span>
+      <input type="number" id="edit-sethand" placeholder="type an exact on-hand count, e.g. after a physical count">
+    </label>
+    <p class="helptext" style="margin-top:-5px;">Filling this in sets the adjustment so the total above matches exactly what you counted. Leave blank to keep it as is.</p>
+    <label class="field"><span>Reorder threshold (${escapeHtml(cfg.unit||"")})</span><input type="number" id="edit-threshold" value="${th}" placeholder="0 = no alert"></label>
+    <p class="helptext">To change price, package size, unit, or recipe portions, edit them on the Costing tab — that's the source of truth for this item.</p>
+    <button class="btn primary full" id="save-item">Save</button>
+    <button class="btn full" id="cancel-item" style="margin-top:8px;">Cancel</button>
+  </div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener("click", e=>{ if(e.target===overlay) document.body.removeChild(overlay); });
+  document.getElementById("cancel-item").addEventListener("click", ()=>document.body.removeChild(overlay));
+  document.getElementById("save-item").addEventListener("click", async ()=>{
+    if(!state.itemOverrides[name]) state.itemOverrides[name]={};
+    const c=itemCfg(name);
+    const setHandVal = document.getElementById("edit-sethand").value;
+    const newAdj = setHandVal!=="" ? (parseFloat(setHandVal)||0) - autoStock : adj;
+    state.itemOverrides[name] = {price:c.price, amt:c.amt, unit:c.unit,
+      threshold: parseFloat(document.getElementById("edit-threshold").value)||0,
+      manualAdjustment: newAdj,
+      servingsPerBatch: (state.itemOverrides[name]||{}).servingsPerBatch};
+    await saveData(); document.body.removeChild(overlay); render(); showToast("Updated "+name);
+  });
+}
+
+/* ===================== POP-UP TRACKER TAB ===================== */
+function getEvent(id){ return state.popupEvents.find(e=>e.id===id); }
+function getDay(ev,id){ return ev.days.find(d=>d.id===id); }
+function dayTotals(day){
+  let revenue=0,count=0,foodCost=0;
+  const byProduct={}, byPayment={Cash:0,GCash:0,GoTyme:0};
+  day.entries.forEach(en=>{
+    const q=en.qty||1, price=sellPrice(en.product)*q, cost=productCost(en.product)*q;
+    revenue+=price; count+=q; foodCost+=cost;
+    byProduct[en.product]=(byProduct[en.product]||0)+q;
+    byPayment[en.payment]=(byPayment[en.payment]||0)+price;
+  });
+  const grossProfit=revenue, netProfit=grossProfit-foodCost, rent=Number(day.rent)||0;
+  const profit=netProfit-rent, tithe=netProfit*0.10;
+  return {revenue,count,byProduct,byPayment,foodCost,grossProfit,netProfit,rent,profit,tithe};
+}
+function eventTotals(ev){
+  let revenue=0,count=0,foodCost=0,rentTotal=0;
+  ev.days.forEach(d=>{ const t=dayTotals(d); revenue+=t.revenue; count+=t.count; foodCost+=t.foodCost; rentTotal+=t.rent; });
+  const grossProfit=revenue, netProfit=grossProfit-foodCost, profit=netProfit-rentTotal, tithe=netProfit*0.10;
+  return {revenue,count,foodCost,grossProfit,netProfit,rentTotal,profit,tithe};
+}
+function renderPopup(main){
+  if(!state.currentEventId) return renderPopupHome(main);
+  renderPopupEvent(main);
+}
+function renderPopupHome(main){
+  let html = `<div class="card"><h2 style="margin:0 0 10px;font-size:13px;">Start a new pop-up</h2>
+    <label class="field"><span>Pop-up name</span><input type="text" id="new-name" placeholder="e.g. Eastwood Central Plaza"></label>
+    <label class="field" style="margin-bottom:0;"><span>Dates</span><input type="text" id="new-dates" placeholder="e.g. Aug 28 - 30"></label>
+    <button class="btn primary full" id="create-event" style="margin-top:10px;">Create pop-up</button>
+  </div><h2 class="sectitle">Your pop-ups</h2>`;
+  if(state.popupEvents.length===0){
+    html += `<div class="empty-state">No pop-ups yet.</div>`;
+  } else {
+    state.popupEvents.slice().reverse().forEach(ev=>{
+      const t=eventTotals(ev);
+      html += `<div class="event-item" data-id="${ev.id}">
+        <div><p class="ename">${escapeHtml(ev.name)}</p><p class="emeta">${escapeHtml(ev.dates||"")} · ${ev.days.length} day${ev.days.length===1?"":"s"} · ${t.count} items</p></div>
+        <span class="erev">${money(t.revenue)}</span></div>`;
+    });
+  }
+  main.innerHTML = html;
+  document.getElementById("create-event").addEventListener("click", async ()=>{
+    const name=document.getElementById("new-name").value.trim();
+    if(!name){ showToast("Add a pop-up name first"); return; }
+    const dates=document.getElementById("new-dates").value.trim();
+    const ev={id:uid("ev"),name,dates,days:[{id:uid("day"),label:"Day 1",entries:[],rent:0}]};
+    state.popupEvents.push(ev); state.currentEventId=ev.id; state.currentDayId=ev.days[0].id;
+    await saveData(); render();
+  });
+  main.querySelectorAll(".event-item").forEach(el=>{
+    el.addEventListener("click", ()=>{
+      const ev=getEvent(el.getAttribute("data-id"));
+      state.currentEventId=ev.id; state.currentDayId=ev.days[ev.days.length-1].id; render();
+    });
+  });
+}
+function renderPopupEvent(main){
+  const ev=getEvent(state.currentEventId);
+  if(!ev){ state.currentEventId=null; return renderPopupHome(main); }
+  let day=getDay(ev,state.currentDayId);
+  if(!day){ day=ev.days[ev.days.length-1]; state.currentDayId=day.id; }
+  const dt=dayTotals(day), et=eventTotals(ev);
+  const products = sellableProducts();
+
+  let html = `<button class="backbtn" id="back-home">&larr; all pop-ups</button>`;
+  html += `<div class="card" style="padding:11px 13px;"><p style="font-weight:800;font-size:14px;margin:0 0 2px;">${escapeHtml(ev.name)}</p>
+    <p style="font-size:11px;color:#888;margin:0;">${escapeHtml(ev.dates||"")} · event total ${money(et.revenue)}</p></div>`;
+  html += `<div class="daytabs" id="daytabs">`;
+  ev.days.forEach(d=>html+=`<button data-day="${d.id}" class="${d.id===day.id?'active':''}">${escapeHtml(d.label)}</button>`);
+  html += `<button class="addday" id="add-day">+ add day</button></div>`;
+  html += `<div class="stat-row"><div class="stat"><p class="n">${money(dt.revenue)}</p><p class="l">Today's revenue</p></div>
+    <div class="stat"><p class="n">${dt.count}</p><p class="l">Items sold today</p></div></div>`;
+
+  html += `<h2 class="sectitle">Tap to log a sale</h2><div class="prodgrid">`;
+  products.forEach(p=>{
+    html += `<button class="prodbtn" data-prod="${escapeHtml(p)}"><span class="pname">${escapeHtml(productLabel(p))}</span><p class="pprice">${money(sellPrice(p))}</p></button>`;
+  });
+  html += `</div>`;
+
+  html += `<h2 class="sectitle">Today's profitability</h2><div class="card">
+    <label class="field" style="margin-bottom:10px;"><span>Rent for today (₱)</span>
+    <input type="text" inputmode="decimal" id="rent-input" value="${day.rent?day.rent:''}" placeholder="e.g. 4500"></label>
+    <div class="tablewrap"><table>
+      <tr><td>Food cost</td><td class="num">${money(dt.foodCost)}</td></tr>
+      <tr><td>Gross profit</td><td class="num">${money(dt.grossProfit)}</td></tr>
+      <tr><td>Net profit</td><td class="num">${money(dt.netProfit)}</td></tr>
+      <tr><td>Rent</td><td class="num">${money(dt.rent)}</td></tr>
+      <tr><td style="font-weight:800;">Profit</td><td class="num" style="font-weight:800;color:${dt.profit>=0?'var(--grn)':'var(--red)'};">${money(dt.profit)}</td></tr>
+      <tr><td>Tithe (10% of net)</td><td class="num">${money(dt.tithe)}</td></tr>
+    </table></div></div>`;
+
+  if(dt.count>0){
+    html += `<h2 class="sectitle">Recent entries</h2><div class="card">`;
+    day.entries.slice().reverse().slice(0,15).forEach(en=>{
+      const q=en.qty||1;
+      html += `<div class="logrow"><div><div class="li-name">${q>1?q+"x ":""}${escapeHtml(productLabel(en.product))}</div>
+        <div class="li-meta">${escapeHtml(en.payment)} · ${money(sellPrice(en.product)*q)}</div></div>
+        <button class="li-del" data-entry="${en.id}">&times;</button></div>`;
+    });
+    html += `</div>`;
+  }
+
+  html += `<h2 class="sectitle">Event summary — all days</h2><div class="card tablewrap"><table>
+    <tr><th>Day</th><th style="text-align:right;">Items</th><th style="text-align:right;">Revenue</th><th style="text-align:right;">Profit</th></tr>`;
+  ev.days.forEach(d=>{ const t=dayTotals(d); html+=`<tr><td>${escapeHtml(d.label)}</td><td class="num">${t.count}</td><td class="num">${money(t.revenue)}</td><td class="num" style="color:${t.profit>=0?'var(--grn)':'var(--red)'};">${money(t.profit)}</td></tr>`; });
+  html += `<tr><td style="font-weight:800;">Total</td><td class="num" style="font-weight:800;">${et.count}</td><td class="num" style="font-weight:800;">${money(et.revenue)}</td><td class="num" style="font-weight:800;color:${et.profit>=0?'var(--grn)':'var(--red)'};">${money(et.profit)}</td></tr>
+  </table></div>`;
+
+  main.innerHTML = html;
+  document.getElementById("back-home").addEventListener("click", ()=>{ state.currentEventId=null; render(); });
+  document.querySelectorAll("#daytabs button[data-day]").forEach(b=>b.addEventListener("click",()=>{state.currentDayId=b.getAttribute("data-day");render();}));
+  document.getElementById("add-day").addEventListener("click", async ()=>{
+    const nd={id:uid("day"),label:"Day "+(ev.days.length+1),entries:[],rent:0};
+    ev.days.push(nd); state.currentDayId=nd.id; await saveData(); render();
+  });
+  document.getElementById("rent-input").addEventListener("change", async e=>{
+    day.rent=parseFloat(e.target.value)||0; await saveData(); render();
+  });
+  main.querySelectorAll(".prodbtn").forEach(b=>b.addEventListener("click",()=>{state.pendingProduct=b.getAttribute("data-prod");showPaySheet();}));
+  main.querySelectorAll(".li-del").forEach(b=>b.addEventListener("click", async ()=>{
+    day.entries=day.entries.filter(e=>e.id!==b.getAttribute("data-entry")); await saveData(); render();
+  }));
+}
+function showPaySheet(){
+  const overlay=document.createElement("div"); overlay.className="overlay";
+  let qty=1; const product=state.pendingProduct; const price=sellPrice(product);
+  overlay.innerHTML = `<div class="sheet"><h3>${escapeHtml(productLabel(product))}</h3>
+    <p style="color:#888;font-size:12.5px;margin:0 0 10px;">${money(price)} — select quantity and payment</p>
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;">
+      <button class="btn small" id="qty-minus" style="width:38px;">&minus;</button>
+      <span id="qty-display" style="font-weight:800;font-size:15px;min-width:18px;text-align:center;">1</span>
+      <button class="btn small" id="qty-plus" style="width:38px;">+</button>
+      <span id="qty-subtotal" style="margin-left:auto;font-weight:800;color:var(--grn);">${money(price)}</span>
+    </div>
+    <div class="payrow">${PAYMENTS.map(pm=>`<button data-pm="${pm}">${pm}</button>`).join("")}</div>
+    <button class="btn full" id="cancel-pay" style="margin-top:10px;">Cancel</button></div>`;
+  document.body.appendChild(overlay);
+  function upd(){ document.getElementById("qty-display").textContent=qty; document.getElementById("qty-subtotal").textContent=money(price*qty); }
+  document.getElementById("qty-minus").addEventListener("click",()=>{ if(qty>1){qty--;upd();} });
+  document.getElementById("qty-plus").addEventListener("click",()=>{ qty++;upd(); });
+  overlay.querySelectorAll("button[data-pm]").forEach(b=>b.addEventListener("click", async ()=>{
+    const ev=getEvent(state.currentEventId), day=getDay(ev,state.currentDayId);
+    day.entries.push({id:uid("sale"),product,payment:b.getAttribute("data-pm"),qty,time:new Date().toISOString()});
+    await saveData(); showToast((qty>1?qty+"x ":"")+productLabel(product)+" logged");
+    document.body.removeChild(overlay); render();
+  }));
+  document.getElementById("cancel-pay").addEventListener("click",()=>document.body.removeChild(overlay));
+  overlay.addEventListener("click", e=>{ if(e.target===overlay) document.body.removeChild(overlay); });
+}
+
+/* ===================== VENUE ANALYSIS TAB ===================== */
+const VENUE_SECTIONS = [
+  { key:"crowd", title:"The crowd", color:"#0D0D0D", questions:[
+    { type:"text", q:"Who is the primary crowd here?", hint:"Students, families, young professionals, office workers — be specific.", placeholder:"e.g. young professionals, BPO + residential mix" },
+    { type:"yesno", q:"Is ₱299 a comfortable or a stretch spend for the majority of foot traffic here?", hint:"Price perception is relative to the environment, not absolute." },
+    { type:"choice", q:"Are people here in discovery mode or destination mode?", hint:"Discovery crowds buy impulsively. Destination crowds walk past to get somewhere.",
+      options:[ {val:"discovery", label:"Discovery mode", style:"yes"}, {val:"destination", label:"Destination mode", style:"no"} ] },
+    { type:"choice", q:"Is this a walking crowd or a dwelling crowd?", hint:"A dwelling crowd sits, eats, spends more. A walking crowd needs to be stopped fast.",
+      options:[ {val:"dwelling", label:"Dwelling crowd", style:"yes"}, {val:"walking", label:"Walking crowd", style:"no"} ] }
+  ]},
+  { key:"event", title:"The event and timing", color:"#1A3A6E", questions:[
+    {type:"yesno", q:"Is there a concurrent event or festival running — and what is its theme?", hint:"THE FAIRVIEW LESSON. A themed event brings a themed budget already spent elsewhere."},
+    {type:"yesno", q:"Does the concurrent event's audience complement BeefX or compete for the same budget?", hint:"Dessert festival = competing. Beer festival = complementary. General food event = ideal."},
+    {type:"yesno", q:"Do your operating hours match this venue's actual peak foot traffic window?", hint:"Paying for slow hours to catch a few busy ones is a bad trade."}
+  ]},
+  { key:"competition", title:"The competition", color:"#B5640A", questions:[
+    { type:"text", q:"Are there other burger stalls or permanent burger restaurants within visual range?", hint:"Name them — know exactly who else is fighting for the same customer.", placeholder:"e.g. Scratch Smashburgers, Burger Beast" },
+    { type:"text", q:"What is the average food price at this venue vs BeefX's ₱299?", hint:"₱299 reads differently depending on what surrounds it.", placeholder:"e.g. ₱250–350 average across nearby vendors" }
+  ]},
+  { key:"location", title:"Location within the venue", color:"#1A5C2A", questions:[
+    {type:"yesno", q:"Is your spot a natural walking path, or somewhere people have to seek out?", hint:"A location people walk through beats one they walk to."},
+    {type:"yesno", q:"Is there seating nearby for customers to eat?", hint:"No seating means fewer orders of food that needs both hands and time."},
+    {type:"yesno", q:"Can griddle aroma reach the main foot traffic path from your position?", hint:"Smell is your most powerful walk-up conversion tool."}
+  ]},
+  { key:"numbers", title:"The numbers", color:"#C93A1E", questions:[
+    { type:"dual", q:"What is the total stall fee, and what's the break-even burger count on that alone?", hint:"Know this before saying yes to anything.",
+      fields:[ {key:"fee", label:"Total stall fee (₱)", placeholder:"e.g. 18000"}, {key:"breakeven", label:"Break-even burgers", placeholder:"e.g. 150"} ] },
+    { type:"text", q:"What is a realistic minimum sell-through per day — does that cover total daily costs?", hint:"The conservative number, not the optimistic one.", placeholder:"e.g. 35 burgers/day minimum" },
+    {type:"yesno", q:"If this breaks even or loses money, does exposure or acquisition justify the cost?", hint:"Sometimes yes — but it must be a conscious call, not a surprise."}
+  ]}
+];
+const VENUE_TOTAL_Q = VENUE_SECTIONS.reduce((a,s)=>a+s.questions.length,0);
+function vqid(si,qi){ return VENUE_SECTIONS[si].key+"_"+qi; }
+function newVenue(){ return { id: uid("v"), name:"", dates:"", fee:"", answers:{}, notes:{}, pros:"", cons:"" }; }
+function venueIsAnswered(q,val){
+  if(q.type==="text") return typeof val==="string" && val.trim()!=="";
+  if(q.type==="dual") return val && q.fields.every(f=>val[f.key] && String(val[f.key]).trim()!=="");
+  return !!val;
+}
+function computeVenueVerdict(v){
+  let yes=0,no=0,unsure=0,answered=0;
+  VENUE_SECTIONS.forEach((s,si)=>s.questions.forEach((q,qi)=>{
+    const val=v.answers[vqid(si,qi)];
+    if(venueIsAnswered(q,val)) answered++;
+    if(q.type==="yesno"){ if(val==="yes") yes++; else if(val==="no") no++; else if(val==="unsure") unsure++; }
+    else if(q.type==="choice" && val){ const opt=q.options.find(o=>o.val===val); if(opt){ if(opt.style==="yes") yes++; else no++; } }
+  }));
+  const judgmentTotal = VENUE_SECTIONS.reduce((a,s)=>a+s.questions.filter(q=>q.type==="yesno"||q.type==="choice").length,0);
+  const flagged=no+unsure;
+  let verdict,color,sub;
+  if(answered<VENUE_TOTAL_Q){ verdict="Incomplete"; color="#888"; sub=(VENUE_TOTAL_Q-answered)+" question"+(VENUE_TOTAL_Q-answered===1?"":"s")+" still need an answer."; }
+  else if(flagged<=3){ verdict="Book it"; color="var(--grn)"; sub=flagged+" flagged answer"+(flagged===1?"":"s")+" out of "+judgmentTotal+" — within a safe range."; }
+  else if(flagged<=6){ verdict="Proceed with caution"; color="var(--amb)"; sub=flagged+" flagged answers out of "+judgmentTotal+". Revisit the weak sections before committing."; }
+  else { verdict="Pass"; color="var(--red)"; sub=flagged+" flagged answers out of "+judgmentTotal+". More than 3 uncertain or negative — the decision rule says don't book."; }
+  return {yes,no,unsure,answered,flagged,verdict,color,sub};
+}
+function renderVenues(main){
+  if(state.venuesView==="list" || !state.currentVenueId) return renderVenuesList(main);
+  renderVenueForm(main);
+}
+function renderVenuesList(main){
+  let html = `<div class="card"><h2 style="margin:0 0 10px;font-size:13px;">Evaluate a new venue</h2>
+    <button class="btn primary full" id="new-venue-btn">Start new evaluation</button></div>`;
+  html += `<h2 class="sectitle">Saved venues (${state.venues.length})</h2>`;
+  if(state.venues.length===0){ html += `<div class="empty-state">No venues evaluated yet.</div>`; }
+  else {
+    state.venues.slice().reverse().forEach(v=>{
+      const r = computeVenueVerdict(v);
+      html += `<div class="event-item" data-id="${v.id}">
+        <div><p class="ename">${escapeHtml(v.name||"Untitled venue")}</p><p class="emeta">${escapeHtml(v.dates||"no dates set")}${v.fee?" · ₱"+escapeHtml(v.fee)+"/day":""}</p></div>
+        <span class="badge" style="background:${r.color}22;color:${r.color};">${r.verdict}</span></div>`;
+    });
+  }
+  main.innerHTML = html;
+  document.getElementById("new-venue-btn").addEventListener("click", ()=>{
+    const v = newVenue(); state.venues.push(v); state.currentVenueId=v.id; state.venuesView="form"; render();
+  });
+  main.querySelectorAll(".event-item").forEach(el=>{
+    el.addEventListener("click", ()=>{ state.currentVenueId=el.getAttribute("data-id"); state.venuesView="form"; render(); });
+  });
+}
+function venueQInput(q,id,val){
+  if(q.type==="yesno"){
+    const a=val||"";
+    return `<div class="payrow" data-vqid="${id}" data-vtype="yesno" style="margin-top:6px;">
+      <button data-val="yes" style="${a==='yes'?'background:#E2F0E4;border-color:var(--grn);color:var(--grn);':''}">Yes</button>
+      <button data-val="no" style="${a==='no'?'background:#FBE7E2;border-color:var(--red);color:var(--red);':''}">No</button>
+      <button data-val="unsure" style="${a==='unsure'?'background:#FCEFDD;border-color:var(--amb);color:var(--amb);':''}">Unsure</button>
+    </div>`;
+  }
+  if(q.type==="choice"){
+    const a=val||"";
+    return `<div class="payrow" data-vqid="${id}" data-vtype="choice" style="margin-top:6px;">
+      ${q.options.map(o=>{
+        const sel = a===o.val;
+        const style = sel ? (o.style==="yes" ? "background:#E2F0E4;border-color:var(--grn);color:var(--grn);" : "background:#FBE7E2;border-color:var(--red);color:var(--red);") : "";
+        return `<button data-val="${o.val}" style="${style}">${escapeHtml(o.label)}</button>`;
+      }).join("")}
+    </div>`;
+  }
+  if(q.type==="text"){
+    return `<input type="text" data-vqid="${id}" data-vtype="text" placeholder="${escapeHtml(q.placeholder||"")}" value="${escapeHtml(val||"")}" style="margin-top:6px;">`;
+  }
+  if(q.type==="dual"){
+    const a=val||{};
+    return `<div style="display:flex;gap:8px;margin-top:6px;">${q.fields.map(f=>`
+      <div style="flex:1;"><span style="font-size:10.5px;color:#888;display:block;margin-bottom:3px;">${escapeHtml(f.label)}</span>
+      <input type="text" data-vqid="${id}" data-vtype="dual" data-vfield="${f.key}" placeholder="${escapeHtml(f.placeholder||"")}" value="${escapeHtml(a[f.key]||"")}"></div>
+    `).join("")}</div>`;
+  }
+  return "";
+}
+function renderVenueForm(main){
+  const v = state.venues.find(x=>x.id===state.currentVenueId);
+  if(!v){ state.venuesView="list"; return renderVenuesList(main); }
+  const r = computeVenueVerdict(v);
+  const pct = Math.round((r.answered/VENUE_TOTAL_Q)*100);
+  let html = `<button class="backbtn" id="venue-back">&larr; all venues</button>`;
+  html += `<div class="card">
+    <label class="field"><span>Venue name</span><input type="text" id="v-name" value="${escapeHtml(v.name)}" placeholder="e.g. Greenfield Weekend Market"></label>
+    <label class="field"><span>Dates being considered</span><input type="text" id="v-dates" value="${escapeHtml(v.dates)}" placeholder="e.g. Sep 3-6"></label>
+    <label class="field" style="margin-bottom:0;"><span>Stall fee per day (₱)</span><input type="number" id="v-fee" value="${escapeHtml(v.fee)}" placeholder="e.g. 3000"></label>
+  </div>`;
+  html += `<div style="height:6px;background:var(--grey);border-radius:99px;overflow:hidden;margin-bottom:6px;"><div style="height:100%;width:${pct}%;background:var(--yel);"></div></div>
+    <p style="font-size:10.5px;color:#888;text-align:right;margin:0 0 12px;">${r.answered} of ${VENUE_TOTAL_Q} answered</p>`;
+
+  VENUE_SECTIONS.forEach((s,si)=>{
+    html += `<div class="cattitle" style="background:${s.color};">${escapeHtml(s.title)}</div>`;
+    s.questions.forEach((q,qi)=>{
+      const id = vqid(si,qi);
+      const val = v.answers[id];
+      html += `<div class="card" style="margin-bottom:7px;">
+        <p style="font-weight:800;font-size:12px;margin:0 0 3px;">${escapeHtml(q.q)}</p>
+        <p class="helptext" style="margin-bottom:0;">${escapeHtml(q.hint)}</p>
+        ${venueQInput(q,id,val)}
+        <input type="text" data-vnote="${id}" placeholder="Notes (optional)" value="${escapeHtml(v.notes[id]||"")}" style="margin-top:6px;">
+      </div>`;
+    });
+  });
+
+  html += `<div class="card"><h2 style="margin:0 0 8px;font-size:13px;color:var(--grn);">+ Pros</h2>
+    <textarea id="v-pros" style="width:100%;min-height:60px;padding:8px;border:1px solid #D8D6CE;border-radius:8px;font-family:inherit;font-size:12.5px;" placeholder="What's working in this venue's favor?">${escapeHtml(v.pros)}</textarea></div>`;
+  html += `<div class="card"><h2 style="margin:0 0 8px;font-size:13px;color:var(--red);">– Cons</h2>
+    <textarea id="v-cons" style="width:100%;min-height:60px;padding:8px;border:1px solid #D8D6CE;border-radius:8px;font-family:inherit;font-size:12.5px;" placeholder="What's the real risk here?">${escapeHtml(v.cons)}</textarea></div>`;
+
+  html += `<div class="card" style="background:#FCF3DE;border-color:#F0DFA8;"><p style="font-size:11px;color:#7A5A0A;margin:0;line-height:1.5;"><b>The decision rule:</b> book when the crowd matches BeefX's buyer profile, break-even is achievable on a slow day, and at least one of exposure, acquisition, or profit is clearly present. More than 3 uncertain or negative judgment answers — pass.</p></div>`;
+
+  html += `<div class="card" style="background:${r.color};color:#fff;text-align:center;">
+    <p style="font-size:10px;letter-spacing:.08em;text-transform:uppercase;opacity:.85;margin:0 0 4px;">Verdict</p>
+    <p style="font-size:20px;font-weight:900;margin:0 0 6px;">${r.verdict}</p>
+    <p style="font-size:12px;opacity:.92;margin:0;">${r.sub}</p></div>`;
+
+  html += `<div class="btnbar" style="display:flex;gap:8px;margin-top:10px;">
+    <button class="btn full" id="venue-delete" style="color:var(--red);">Delete this venue</button>
+  </div>`;
+
+  main.innerHTML = html;
+  document.getElementById("venue-back").addEventListener("click", ()=>{ state.venuesView="list"; state.currentVenueId=null; render(); });
+
+  function saveField(fn){ fn(); saveData(); }
+  document.getElementById("v-name").addEventListener("change", e=>saveField(()=>v.name=e.target.value));
+  document.getElementById("v-dates").addEventListener("change", e=>saveField(()=>v.dates=e.target.value));
+  document.getElementById("v-fee").addEventListener("change", e=>saveField(()=>v.fee=e.target.value));
+  document.getElementById("v-pros").addEventListener("change", e=>saveField(()=>v.pros=e.target.value));
+  document.getElementById("v-cons").addEventListener("change", e=>saveField(()=>v.cons=e.target.value));
+
+  main.querySelectorAll("[data-vqid]").forEach(el=>{
+    const id = el.getAttribute("data-vqid");
+    const type = el.getAttribute("data-vtype");
+    if(type==="yesno" || type==="choice"){
+      el.querySelectorAll("button").forEach(btn=>{
+        btn.addEventListener("click", async ()=>{
+          const val = btn.getAttribute("data-val");
+          v.answers[id] = (v.answers[id]===val) ? undefined : val;
+          if(v.answers[id]===undefined) delete v.answers[id];
+          await saveData(); render();
+        });
+      });
+    } else if(type==="text"){
+      el.addEventListener("change", async ()=>{ v.answers[id]=el.value; await saveData(); render(); });
+    } else if(type==="dual"){
+      el.addEventListener("change", async ()=>{
+        const fk = el.getAttribute("data-vfield");
+        if(!v.answers[id] || typeof v.answers[id]!=="object") v.answers[id]={};
+        v.answers[id][fk] = el.value;
+        await saveData(); render();
+      });
+    }
+  });
+  main.querySelectorAll("[data-vnote]").forEach(el=>{
+    el.addEventListener("change", async ()=>{ v.notes[el.getAttribute("data-vnote")]=el.value; await saveData(); });
+  });
+  document.getElementById("venue-delete").addEventListener("click", async ()=>{
+    state.venues = state.venues.filter(x=>x.id!==v.id);
+    state.currentVenueId=null; state.venuesView="list";
+    await saveData(); render();
+  });
+}
+
+/* ===================== EQUIPMENT (ASSET REGISTRY) TAB ===================== */
+function renderEquipment(main){
+  const total = state.equipmentLog.reduce((a,e)=>a+Number(e.price||0)+Number(e.delivery||0),0);
+  let html = `<div class="card"><h2 style="margin:0 0 10px;font-size:13px;">Add equipment</h2>
+    <label class="field"><span>Equipment name</span><input type="text" id="eq-name" placeholder="e.g. Gas Griddle"></label>
+    <label class="field"><span>Purchased from</span>
+      <select id="eq-from-select">${EQUIPMENT_SUPPLIERS.map(s=>`<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join("")}<option value="__custom__">Other (type below)...</option></select>
+    </label>
+    <label class="field" id="eq-from-custom-wrap" style="display:none;"><span>Supplier name</span><input type="text" id="eq-from-custom" placeholder="e.g. New supplier name"></label>
+    <label class="field"><span>Date purchased</span><input type="date" id="eq-date" value="${new Date().toISOString().slice(0,10)}"></label>
+    <label class="field"><span>Price paid (₱)</span><input type="number" id="eq-price" placeholder="e.g. 3350"></label>
+    <label class="field"><span>Delivery fee (₱)</span><input type="number" id="eq-delivery" placeholder="0"></label>
+    <label class="field"><span>Status</span><select id="eq-status"><option>Active</option><option>Needs repair</option><option>Retired</option></select></label>
+    <label class="field"><span>Location</span><select id="eq-location"><option>Home</option><option>Pop-up kit</option><option>Storage</option></select></label>
+    <label class="field" style="margin-bottom:0;"><span>Condition / notes</span><input type="text" id="eq-notes" placeholder="optional"></label>
+    <button class="btn primary full" id="eq-submit" style="margin-top:10px;">Add to registry</button>
+  </div>`;
+  html += `<h2 class="sectitle">Asset registry</h2>
+  <div class="card tablewrap"><table><tr><th>Equipment</th><th>Status</th><th>Location</th><th style="text-align:right;">Total cost</th><th></th></tr>`;
+  state.equipmentLog.forEach(e=>{
+    const t=Number(e.price||0)+Number(e.delivery||0);
+    html += `<tr><td>${escapeHtml(e.name)}<div style="font-size:10px;color:#999;">${escapeHtml(e.from)} · ${escapeHtml(e.date)}${e.notes?" · "+escapeHtml(e.notes):""}</div></td>
+      <td>${escapeHtml(e.status)}</td><td>${escapeHtml(e.location)}</td><td class="num">${money(t)}</td>
+      <td><button class="li-del" data-eq="${e.id}">&times;</button></td></tr>`;
+  });
+  html += `<tr><td style="font-weight:800;">Total equipment spend</td><td></td><td></td><td class="num" style="font-weight:800;">${money(total)}</td><td></td></tr></table></div>`;
+  main.innerHTML = html;
+  document.getElementById("eq-from-select").addEventListener("change", e=>{
+    document.getElementById("eq-from-custom-wrap").style.display = e.target.value==="__custom__" ? "" : "none";
+  });
+  document.getElementById("eq-submit").addEventListener("click", async ()=>{
+    const name=document.getElementById("eq-name").value.trim();
+    if(!name){ showToast("Add an equipment name first"); return; }
+    const fromSel = document.getElementById("eq-from-select").value;
+    const from = fromSel==="__custom__" ? document.getElementById("eq-from-custom").value.trim() : fromSel;
+    state.equipmentLog.push({
+      id:uid("eq"), name, from,
+      date:document.getElementById("eq-date").value, price:parseFloat(document.getElementById("eq-price").value)||0,
+      delivery:parseFloat(document.getElementById("eq-delivery").value)||0,
+      status:document.getElementById("eq-status").value, location:document.getElementById("eq-location").value,
+      notes:document.getElementById("eq-notes").value.trim()
+    });
+    await saveData(); showToast("Added to registry"); render();
+  });
+  main.querySelectorAll(".li-del[data-eq]").forEach(b=>b.addEventListener("click", async ()=>{
+    state.equipmentLog=state.equipmentLog.filter(e=>e.id!==b.getAttribute("data-eq")); await saveData(); render();
+  }));
+}
+
+/* ===================== PURCHASING (INGREDIENTS/CONSUMABLES) TAB ===================== */
+function renderPurchasing(main){
+  const total = state.purchaseLog.reduce((a,p)=>a+Number(p.price||0)+Number(p.delivery||0),0);
+  let html = `<div class="card"><h2 style="margin:0 0 10px;font-size:13px;">Log a purchase</h2>
+    <label class="field"><span>Item</span><input type="text" id="pu-item" placeholder="e.g. Aviko Fries (10kg)"></label>
+    <label class="field"><span>Purchased from</span>
+      <select id="pu-from-select">${PURCHASE_SUPPLIERS.map(s=>`<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join("")}<option value="__custom__">Other (type below)...</option></select>
+    </label>
+    <label class="field" id="pu-from-custom-wrap" style="display:none;"><span>Supplier name</span><input type="text" id="pu-from-custom" placeholder="e.g. New supplier name"></label>
+    <label class="field"><span>Date</span><input type="date" id="pu-date" value="${new Date().toISOString().slice(0,10)}"></label>
+    <label class="field"><span>Category</span><select id="pu-cat">${PURCHASE_CATEGORIES.map(c=>`<option>${c}</option>`).join("")}</select></label>
+    <label class="field"><span>Price paid (₱)</span><input type="number" id="pu-price" placeholder="e.g. 1100"></label>
+    <label class="field"><span>Delivery fee (₱)</span><input type="number" id="pu-delivery" placeholder="0"></label>
+    <label class="field"><span>Link to inventory item (optional)</span>
+      <select id="pu-link"><option value="">— not inventory-linked —</option>${getAllItems().map(i=>`<option value="${escapeHtml(i.name)}">${escapeHtml(i.name)}</option>`).join("")}</select>
+    </label>
+    <label class="field" style="margin-bottom:0;"><span>Quantity received (in item's unit, if linked)</span><input type="number" id="pu-qty" placeholder="e.g. 10000 for 10kg"></label>
+    <button class="btn primary full" id="pu-submit" style="margin-top:10px;">Log purchase</button>
+  </div>`;
+
+  const byCat={};
+  state.purchaseLog.forEach(p=>{ const t=Number(p.price||0)+Number(p.delivery||0); byCat[p.category]=(byCat[p.category]||0)+t; });
+  html += `<h2 class="sectitle">Spend by category</h2><div class="card tablewrap"><table><tr><th>Category</th><th style="text-align:right;">Total</th></tr>
+    ${Object.entries(byCat).map(([c,t])=>`<tr><td>${escapeHtml(c)}</td><td class="num">${money(t)}</td></tr>`).join("")}
+    <tr><td style="font-weight:800;">Total purchases</td><td class="num" style="font-weight:800;">${money(total)}</td></tr></table></div>`;
+
+  html += `<h2 class="sectitle">Recent purchases (${state.purchaseLog.length} total)</h2><div class="card">`;
+  if(state.purchaseLog.length===0){ html+=`<div class="empty-state">No purchases logged yet.</div>`; }
+  else {
+    state.purchaseLog.slice().reverse().slice(0,30).forEach(p=>{
+      const t=Number(p.price||0)+Number(p.delivery||0);
+      html += `<div class="logrow"><div><div class="li-name">${escapeHtml(p.item)}</div>
+        <div class="li-meta">${escapeHtml(p.date)} · ${escapeHtml(p.category)} · ${escapeHtml(p.from)}${p.linkedItem?" · restocks "+escapeHtml(p.linkedItem):""}</div></div>
+        <div style="display:flex;align-items:center;gap:8px;"><span style="font-weight:800;">${money(t)}</span><button class="li-del" data-pu="${p.id}">&times;</button></div></div>`;
+    });
+  }
+  html += `</div>`;
+  main.innerHTML = html;
+
+  document.getElementById("pu-from-select").addEventListener("change", e=>{
+    document.getElementById("pu-from-custom-wrap").style.display = e.target.value==="__custom__" ? "" : "none";
+  });
+  document.getElementById("pu-submit").addEventListener("click", async ()=>{
+    const item=document.getElementById("pu-item").value.trim();
+    if(!item){ showToast("Add an item name first"); return; }
+    const fromSel = document.getElementById("pu-from-select").value;
+    const from = fromSel==="__custom__" ? document.getElementById("pu-from-custom").value.trim() : fromSel;
+    state.purchaseLog.push({
+      id:uid("pu"), item, from,
+      date:document.getElementById("pu-date").value, category:document.getElementById("pu-cat").value,
+      price:parseFloat(document.getElementById("pu-price").value)||0, delivery:parseFloat(document.getElementById("pu-delivery").value)||0,
+      linkedItem:document.getElementById("pu-link").value||null, qtyReceived:parseFloat(document.getElementById("pu-qty").value)||0
+    });
+    const ok = await saveData();
+    if(ok) showToast("Purchase logged");
+    render();
+  });
+  main.querySelectorAll(".li-del[data-pu]").forEach(b=>b.addEventListener("click", async ()=>{
+    state.purchaseLog=state.purchaseLog.filter(p=>p.id!==b.getAttribute("data-pu")); await saveData(); render();
+  }));
+}
+
+/* ===================== DASHBOARD (FINANCIAL ROLLUP) ===================== */
+function renderDashboard(main){
+  let salesRevenue=0, recipeCost=0, itemsSold=0;
+  state.popupEvents.forEach(ev=>{ const t=eventTotals(ev); salesRevenue+=t.revenue; recipeCost+=t.foodCost; itemsSold+=t.count; });
+  const recipeGrossProfit = salesRevenue - recipeCost;
+
+  const totalPurchases = state.purchaseLog.reduce((a,p)=>a+Number(p.price||0)+Number(p.delivery||0),0);
+  const totalRent = state.popupEvents.reduce((a,ev)=>a+eventTotals(ev).rentTotal,0);
+  const totalEquipment = state.equipmentLog.reduce((a,e)=>a+Number(e.price||0)+Number(e.delivery||0),0);
+
+  const actualCashProfit = salesRevenue - totalPurchases - totalRent;
+  const tithe = Math.max(recipeGrossProfit,0)*0.10;
+
+  let html = `<h2 class="sectitle">Recipe-based margin (from Costing)</h2>
+  <div class="stat-row">
+    <div class="stat"><p class="n">${money(salesRevenue)}</p><p class="l">Total revenue</p></div>
+    <div class="stat"><p class="n">${itemsSold}</p><p class="l">Items sold</p></div>
+  </div>
+  <div class="card tablewrap"><table>
+    <tr><td>Total revenue (all pop-ups)</td><td class="num">${money(salesRevenue)}</td></tr>
+    <tr><td>Theoretical food cost (recipe × units sold)</td><td class="num">${money(recipeCost)}</td></tr>
+    <tr><td style="font-weight:800;">Recipe-based gross profit</td><td class="num" style="font-weight:800;">${money(recipeGrossProfit)}</td></tr>
+    <tr><td>Suggested tithe (10% of gross profit)</td><td class="num">${money(tithe)}</td></tr>
+  </table></div>
+  <p class="helptext">This tells you what your margin SHOULD be based on your recipes. Use it for pricing decisions.</p>
+
+  <h2 class="sectitle">Actual cash profit (real spend)</h2>
+  <div class="card tablewrap"><table>
+    <tr><td>Total revenue</td><td class="num">${money(salesRevenue)}</td></tr>
+    <tr><td>Total ingredient/consumable purchases</td><td class="num">${money(totalPurchases)}</td></tr>
+    <tr><td>Total pop-up rent (logged in tracker)</td><td class="num">${money(totalRent)}</td></tr>
+    <tr><td style="font-weight:800;">Actual cash profit</td><td class="num" style="font-weight:800; color:${actualCashProfit>=0?'var(--grn)':'var(--red)'};">${money(actualCashProfit)}</td></tr>
+  </table></div>
+  <p class="helptext">This reflects real money in vs out — includes waste, buffer stock, and non-recipe spend the theoretical margin above doesn't capture.</p>
+
+  <h2 class="sectitle">Capital invested</h2>
+  <div class="card tablewrap"><table>
+    <tr><td>Total equipment spend (one-time, not operating cost)</td><td class="num">${money(totalEquipment)}</td></tr>
+  </table></div>`;
+
+  main.innerHTML = html;
+}
+
+function renderSetup(){
+  const main = document.getElementById("main");
+  const h = document.getElementById("header");
+  h.innerHTML = `<div class="brand"><div class="beef"><span>BEEF</span></div><span class="x">X</span></div>
+    <div class="sub"><span class="dot" style="background:var(--amb);"></span> one-time setup needed</div>`;
+  main.innerHTML = `
+  <div class="card">
+    <h2 style="margin:0 0 6px;font-size:14px;">Connect your Google Sheet</h2>
+    <p class="helptext">Paste the Web app URL from your deployed Google Apps Script below. This makes the app talk to a real shared database instead of your own browser, so every device and every person you share the file with sees the same live data.</p>
+    <label class="field"><span>Apps Script Web app URL</span>
+      <input type="text" id="setup-url" placeholder="https://script.google.com/macros/s/.../exec">
+    </label>
+    <button class="btn primary full" id="setup-test">Test connection</button>
+    <p id="setup-result" style="font-size:12px;margin:10px 0 0;"></p>
+  </div>
+  <div class="card" id="setup-download-card" style="display:none;">
+    <h2 style="margin:0 0 6px;font-size:14px;color:var(--grn);">Connected!</h2>
+    <p class="helptext">Download your configured copy below. That file — not this one — is the one to open going forward, and the one to send to your assistants and partners. It has your Sheet connection built in permanently.</p>
+    <button class="btn primary full" id="setup-download">Download my configured BeefX Website</button>
+  </div>
+  <div class="card">
+    <p class="helptext" style="margin:0;">Don't have a Sheet connected yet? Ask for the Apps Script setup steps again and follow them — it takes about five minutes and only needs to be done once.</p>
+  </div>`;
+
+  let testedUrl = "";
+  document.getElementById("setup-test").addEventListener("click", async ()=>{
+    const url = document.getElementById("setup-url").value.trim();
+    const resultEl = document.getElementById("setup-result");
+    if(!url){ resultEl.style.color="var(--red)"; resultEl.textContent="Paste your Web app URL first."; return; }
+    resultEl.style.color="#888"; resultEl.textContent="Testing...";
+    try{
+      const res = await fetch(url, {method:"GET"});
+      if(!res.ok) throw new Error("HTTP "+res.status);
+      await res.json();
+      resultEl.style.color="var(--grn)"; resultEl.textContent="Connected successfully.";
+      testedUrl = url;
+      document.getElementById("setup-download-card").style.display="";
+    }catch(e){
+      resultEl.style.color="var(--red)";
+      resultEl.textContent="Couldn't connect. Double check the URL, and that the deployment's access is set to \"Anyone.\"";
+    }
+  });
+  document.getElementById("setup-download").addEventListener("click", ()=>{
+    if(!testedUrl) return;
+    let html = document.documentElement.outerHTML;
+    html = html.replace('const APPS_SCRIPT_URL = "";', 'const APPS_SCRIPT_URL = "'+testedUrl.replace(/"/g,'\\"')+'";');
+    html = "<!DOCTYPE html>\n" + html;
+    const blob = new Blob([html], {type:"text/html"});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = "BeefX_Website_Configured.html";
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast("Downloaded — open that file from now on");
+  });
+}
+
+/* ===================== INIT ===================== */
+(async function init(){
+  if(!APPS_SCRIPT_URL){ renderSetup(); return; }
+  await loadData(true);
+  render();
+  pollTimer = setInterval(pollForUpdates, 4000);
+})();
+</script>
+
+
+</body></html>

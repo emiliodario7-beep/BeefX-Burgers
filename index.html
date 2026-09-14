@@ -147,7 +147,7 @@ const ITEM_DEFS = [
   {name:"Rice Meal Take Out Container",price:600,amt:50,unit:"pcs"}
 ];
 const PRODUCT_DEFS = [
-  {name:"BxBacon QTR", label:"Siga (BeefX Bacon)", sellable:true, defaultPrice:299},
+  {name:"BxBacon QTR", label:"BeefX Bacon", sellable:true, defaultPrice:299},
   {name:"BxLongganisa QTR", label:"Bongga (BeefX Longganisa)", sellable:true, defaultPrice:319},
   {name:"BxSisig QTR", label:"BxSisig QTR (in development)", sellable:false, defaultPrice:0},
   {name:"Awesome", label:"Awesome Sauce (prep batch)", sellable:false, defaultPrice:0},
@@ -160,7 +160,7 @@ const PRODUCT_DEFS = [
   {name:"BURGER STEAK (BONGGA)", label:"Loko Mo Ko (Bongga)", sellable:true, defaultPrice:229}
 ];
 const COMBOS = [
-  {name:"Combo Siga", label:"Combo Meal (Siga)", parts:["BxBacon QTR","Poutine 120g"], defaultPrice:419},
+  {name:"Combo Siga", label:"Combo Meal (BeefX Bacon)", parts:["BxBacon QTR","Poutine 120g"], defaultPrice:419},
   {name:"Combo Bongga", label:"Combo Meal (Bongga)", parts:["BxLongganisa QTR","Poutine 120g"], defaultPrice:419}
 ];
 const BASE_PORTIONS = {
@@ -555,14 +555,22 @@ async function retrySave(){
   showToast("Retrying save...");
   await saveData();
 }
-async function pollForUpdates(){
-  if(document.querySelector(".overlay")) return;
-  if(isWriting) return;
-  if(Date.now()-lastLocalWrite<3000) return;
-  const prev = JSON.stringify(state);
+// Automatic background polling has been removed entirely. It was periodically re-fetching
+// from Google Sheets and could load a slightly-behind snapshot, silently overwriting
+// whatever was on screen — even with zero clicks. Data now only loads on page open or
+// when you explicitly tap Refresh, and only saves when you explicitly tap Save (or take
+// an action that saves immediately, like logging a sale). No more background process
+// fighting your edits.
+async function manualRefresh(){
+  showToast("Refreshing from your Google Sheet...");
   const ok = await loadData(false);
-  if(!ok) return;
-  if(JSON.stringify(state)!==prev) render();
+  if(ok){ showToast("Refreshed"); render(); }
+  else { showToast("Refresh failed — check your connection"); }
+}
+async function manualSaveAll(){
+  showToast("Saving everything...");
+  const ok = await saveData();
+  if(ok) showToast("Everything saved");
 }
 
 function showToast(m){ const t=document.getElementById("toast"); t.textContent=m; t.classList.add("show"); setTimeout(()=>t.classList.remove("show"),1500); }
@@ -707,6 +715,10 @@ function renderHeader(){
       <div class="brand" id="home-btn" style="cursor:pointer;"><div class="beef"><span>BEEF</span></div><span class="x">X</span></div>
       <button id="sync-badge" style="background:none;border:none;font-size:10.5px;color:#aaa;cursor:pointer;padding:4px 8px;"></button>
     </div>
+    <div style="display:flex; gap:8px; margin-top:10px;">
+      <button id="manual-save-btn" class="btn primary" style="flex:1; padding:9px;">Save now</button>
+      <button id="manual-refresh-btn" class="btn" style="flex:1; padding:9px; background:transparent; border-color:#444; color:#ddd;">Refresh</button>
+    </div>
     <div class="navtabs" id="navtabs">
       <button data-v="home" style="${state.view==='home'?'':''}">Home</button>
       ${TABS.map(t=>`<button data-v="${t.v}">${t.l}</button>`).join("")}
@@ -718,6 +730,8 @@ function renderHeader(){
   });
   document.getElementById("home-btn").addEventListener("click", ()=>{ state.view="home"; render(); });
   document.getElementById("sync-badge").addEventListener("click", retrySave);
+  document.getElementById("manual-save-btn").addEventListener("click", manualSaveAll);
+  document.getElementById("manual-refresh-btn").addEventListener("click", manualRefresh);
   updateSyncBadge();
 }
 function render(){
@@ -857,7 +871,7 @@ function renderCosting(main){
     <label class="field" style="margin-bottom:0;max-width:220px;"><span>Servings per batch</span>
       <input type="number" id="awesome-servings" value="${awesomeServings}">
     </label>
-    <p class="helptext" style="margin-top:8px;">→ ${fmt(awesomePerBurger,"g")} of Awesome Sauce per Siga/Bongga burger, used automatically in the recipe and in Inventory deduction.</p>
+    <p class="helptext" style="margin-top:8px;">→ ${fmt(awesomePerBurger,"g")} of Awesome Sauce per BeefX Bacon/Bongga burger, used automatically in the recipe and in Inventory deduction.</p>
   </div>`;
 
   html += `<div class="card"><h2 style="margin:0 0 4px;font-size:13px;">In development (not yet sellable)</h2>
@@ -1541,10 +1555,6 @@ function renderVenueForm(main){
   document.getElementById("v-pros").addEventListener("change", e=>saveField(()=>v.pros=e.target.value));
   document.getElementById("v-cons").addEventListener("change", e=>saveField(()=>v.cons=e.target.value));
 
-  // Important: none of the question handlers below call render(). Rebuilding the whole
-  // 15-question form on every single tap was wiping out anything typed-but-not-yet-blurred
-  // in OTHER fields on the page. Instead we update only the button styling and the verdict
-  // box in place, so the rest of the form (and whatever you're mid-typing) stays untouched.
   main.querySelectorAll("[data-vqid]").forEach(el=>{
     const id = el.getAttribute("data-vqid");
     const type = el.getAttribute("data-vtype");
@@ -1554,19 +1564,17 @@ function renderVenueForm(main){
           const val = btn.getAttribute("data-val");
           v.answers[id] = (v.answers[id]===val) ? undefined : val;
           if(v.answers[id]===undefined) delete v.answers[id];
-          restyleVenueAnswerGroup(el, type, v.answers[id]);
-          updateVenueSummary(v);
           await saveData();
+          render();
         });
       });
     } else if(type==="text"){
-      el.addEventListener("change", async ()=>{ v.answers[id]=el.value; updateVenueSummary(v); await saveData(); });
+      el.addEventListener("change", async ()=>{ v.answers[id]=el.value; await saveData(); });
     } else if(type==="dual"){
       el.addEventListener("change", async ()=>{
         const fk = el.getAttribute("data-vfield");
         if(!v.answers[id] || typeof v.answers[id]!=="object") v.answers[id]={};
         v.answers[id][fk] = el.value;
-        updateVenueSummary(v);
         await saveData();
       });
     }
@@ -1579,58 +1587,6 @@ function renderVenueForm(main){
     state.currentVenueId=null; state.venuesView="list";
     await saveData(); render();
   });
-}
-// Toggles the tapped button's highlight in place, without touching any other field on the page.
-function restyleVenueAnswerGroup(groupEl, type, selectedVal){
-  groupEl.querySelectorAll("button").forEach(btn=>{
-    const val = btn.getAttribute("data-val");
-    const isSel = val===selectedVal;
-    if(type==="yesno"){
-      btn.style.cssText = isSel
-        ? (val==="yes" ? "background:#E2F0E4;border-color:var(--grn);color:var(--grn);" : val==="no" ? "background:#FBE7E2;border-color:var(--red);color:var(--red);" : "background:#FCEFDD;border-color:var(--amb);color:var(--amb);")
-        : "";
-    } else {
-      // choice type: look up whether this option is the "positive" (green) or "negative" (red) style
-      btn.style.cssText = "";
-      if(isSel) btn.setAttribute("data-needs-style","1");
-    }
-  });
-  if(type==="choice"){
-    // Re-derive styles from VENUE_SECTIONS so we don't need to pass option metadata around.
-    const qid = groupEl.getAttribute("data-vqid");
-    for(const s of VENUE_SECTIONS){
-      for(let qi=0; qi<s.questions.length; qi++){
-        if(vqid(VENUE_SECTIONS.indexOf(s), qi)===qid){
-          const q = s.questions[qi];
-          groupEl.querySelectorAll("button").forEach(btn=>{
-            const val = btn.getAttribute("data-val");
-            if(val===selectedVal){
-              const opt = q.options.find(o=>o.val===val);
-              btn.style.cssText = opt && opt.style==="yes"
-                ? "background:#E2F0E4;border-color:var(--grn);color:var(--grn);"
-                : "background:#FBE7E2;border-color:var(--red);color:var(--red);";
-            }
-          });
-          return;
-        }
-      }
-    }
-  }
-}
-// Recomputes and redraws just the progress bar + verdict card, without rebuilding the form.
-function updateVenueSummary(v){
-  const r = computeVenueVerdict(v);
-  const pct = Math.round((r.answered/VENUE_TOTAL_Q)*100);
-  const bar = document.getElementById("venue-progress-bar");
-  const lbl = document.getElementById("venue-progress-label");
-  const card = document.getElementById("venue-verdict-card");
-  if(bar) bar.style.width = pct+"%";
-  if(lbl) lbl.textContent = r.answered+" of "+VENUE_TOTAL_Q+" answered";
-  if(card){
-    card.style.background = r.color;
-    card.querySelector(".vv-title").textContent = r.verdict;
-    card.querySelector(".vv-sub").textContent = r.sub;
-  }
 }
 
 /* ===================== SUPPLIERS TAB ===================== */
@@ -1967,7 +1923,6 @@ function renderSetup(){
   if(!APPS_SCRIPT_URL){ renderSetup(); return; }
   await loadData(true);
   render();
-  pollTimer = setInterval(pollForUpdates, 4000);
 })();
 </script>
 

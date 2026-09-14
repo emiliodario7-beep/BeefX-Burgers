@@ -447,7 +447,8 @@ function defaultHomeOrders(){
   return HISTORICAL_HOME_ORDERS.map(o=>({
     id: uid("home"), submissionDate:o.submissionDate, deliveryDate:o.deliveryDate, slot:o.slot,
     items:o.items.map(it=>({product:it.product, qty:it.qty})),
-    name:o.name, ig:o.ig, mobile:o.mobile, payment:o.payment, notes:o.notes
+    name:o.name, ig:o.ig, mobile:o.mobile, payment:o.payment, notes:o.notes,
+    historical:true // pre-dates this system — counted in stats, never deducted from inventory
   }));
 }
 let state = {
@@ -651,8 +652,11 @@ function currentStock(name){
     });
   }));
   // Home delivery orders cook directly from home stock — no "brought to venue" step
-  // exists for these, so they deduct straight from main inventory when logged.
+  // exists for these, so they deduct straight from main inventory when logged. Historical
+  // orders (imported from before this system existed) are excluded here — their ingredients
+  // were never actually part of tracked inventory, so deducting them would distort real stock.
   (state.homeOrders||[]).forEach(o=>{
+    if(o.historical) return;
     o.items.forEach(it=>{
       const q = it.qty||1;
       expandForDeduction(it.product).forEach(base=>{

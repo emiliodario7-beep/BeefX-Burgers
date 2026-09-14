@@ -498,7 +498,12 @@ function timeAgo(ts){
 async function loadData(isInitial){
   if(!APPS_SCRIPT_URL) return false;
   try{
-    const res = await fetch(APPS_SCRIPT_URL, {method:"GET"});
+    // Cache-busting is essential here: Google Apps Script's GET endpoint can otherwise
+    // silently serve a cached response from just before a recent save, making a save
+    // appear to "revert" the moment you refresh — even on the same device, seconds later.
+    // The unique timestamp param forces a genuinely fresh request every single time.
+    const bustUrl = APPS_SCRIPT_URL + (APPS_SCRIPT_URL.includes("?") ? "&" : "?") + "cb=" + Date.now();
+    const res = await fetch(bustUrl, {method:"GET", cache:"no-store"});
     if(!res.ok) throw new Error("HTTP "+res.status);
     const p = await res.json();
     if(p && typeof p==="object" && Object.keys(p).length>0){
@@ -533,6 +538,7 @@ async function saveData(){
   try{
     const res = await fetch(APPS_SCRIPT_URL, {
       method:"POST",
+      cache:"no-store",
       headers:{"Content-Type":"text/plain;charset=utf-8"}, // avoids a CORS preflight to Apps Script
       body: JSON.stringify({
         itemOverrides:state.itemOverrides, portionOverrides:state.portionOverrides, priceOverrides:state.priceOverrides,

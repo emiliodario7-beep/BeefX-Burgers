@@ -506,6 +506,8 @@ async function loadData(isInitial){
     const res = await fetch(bustUrl, {method:"GET", cache:"no-store"});
     if(!res.ok) throw new Error("HTTP "+res.status);
     const p = await res.json();
+    console.log("[BeefX DEBUG] loadData received popupEvents count:", (p.popupEvents||[]).length,
+      "| entries total:", (p.popupEvents||[]).reduce((a,e)=>a+e.days.reduce((b,d)=>b+d.entries.length,0),0));
     if(p && typeof p==="object" && Object.keys(p).length>0){
       state.itemOverrides = p.itemOverrides||{};
       state.portionOverrides = p.portionOverrides||{};
@@ -535,19 +537,24 @@ async function saveData(){
   if(!APPS_SCRIPT_URL){ showToast("Set up your Google Sheet connection first — see Setup"); return false; }
   isWriting=true;
   syncStatus.state="saving"; updateSyncBadge();
+  const bodyToSend = {
+    itemOverrides:state.itemOverrides, portionOverrides:state.portionOverrides, priceOverrides:state.priceOverrides,
+    customItems:state.customItems, equipmentLog:state.equipmentLog, purchaseLog:state.purchaseLog, homeOrders:state.homeOrders,
+    sauceLog:state.sauceLog, popupEvents:state.popupEvents, venues:state.venues,
+    tithePayments:state.tithePayments, supplierDetails:state.supplierDetails, customSuppliers:state.customSuppliers
+  };
+  console.log("[BeefX DEBUG] saveData sending popupEvents count:", (bodyToSend.popupEvents||[]).length,
+    "| entries total:", (bodyToSend.popupEvents||[]).reduce((a,e)=>a+e.days.reduce((b,d)=>b+d.entries.length,0),0));
   try{
     const res = await fetch(APPS_SCRIPT_URL, {
       method:"POST",
       cache:"no-store",
       headers:{"Content-Type":"text/plain;charset=utf-8"}, // avoids a CORS preflight to Apps Script
-      body: JSON.stringify({
-        itemOverrides:state.itemOverrides, portionOverrides:state.portionOverrides, priceOverrides:state.priceOverrides,
-        customItems:state.customItems, equipmentLog:state.equipmentLog, purchaseLog:state.purchaseLog, homeOrders:state.homeOrders,
-        sauceLog:state.sauceLog, popupEvents:state.popupEvents, venues:state.venues,
-        tithePayments:state.tithePayments, supplierDetails:state.supplierDetails, customSuppliers:state.customSuppliers
-      })
+      body: JSON.stringify(bodyToSend)
     });
     if(!res.ok) throw new Error("HTTP "+res.status);
+    const resText = await res.text();
+    console.log("[BeefX DEBUG] saveData server responded with:", resText);
     lastLocalWrite=Date.now();
     syncStatus.state="idle"; syncStatus.lastSavedAt=Date.now(); syncStatus.lastError=null;
     updateSyncBadge();
@@ -1394,8 +1401,14 @@ function showPaySheet(){
   document.getElementById("qty-plus").addEventListener("click",()=>{ qty++;upd(); });
   overlay.querySelectorAll("button[data-pm]").forEach(b=>b.addEventListener("click", async ()=>{
     const ev=getEvent(state.currentEventId), day=getDay(ev,state.currentDayId);
+    console.log("[BeefX DEBUG] Logging sale — event:", ev && ev.name, "| day:", day && day.label, "| product:", product, "| qty:", qty);
+    if(!ev || !day){ console.log("[BeefX DEBUG] ERROR: event or day not found!", {currentEventId: state.currentEventId, currentDayId: state.currentDayId}); }
     day.entries.push({id:uid("sale"),product,payment:b.getAttribute("data-pm"),qty,time:new Date().toISOString()});
-    await saveData(); showToast((qty>1?qty+"x ":"")+productLabel(product)+" logged");
+    console.log("[BeefX DEBUG] day.entries after push:", JSON.stringify(day.entries));
+    console.log("[BeefX DEBUG] state.popupEvents entries count across all events:", state.popupEvents.reduce((a,e)=>a+e.days.reduce((b,d)=>b+d.entries.length,0),0));
+    const saveOk = await saveData();
+    console.log("[BeefX DEBUG] saveData() returned:", saveOk);
+    showToast((qty>1?qty+"x ":"")+productLabel(product)+" logged");
     document.body.removeChild(overlay); render();
   }));
   document.getElementById("cancel-pay").addEventListener("click",()=>document.body.removeChild(overlay));

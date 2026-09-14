@@ -114,7 +114,7 @@
   <div class="card">
     <p class="helptext" style="margin:0;">Don't have a Sheet connected yet? Ask for the Apps Script setup steps again and follow them — it takes about five minutes and only needs to be done once.</p>
   </div></main>
-<div class="toast" id="toast">Downloaded — open that file from now on</div>
+<div class="toast" id="toast"></div>
 
 <script>
 /* ===================== SOURCE DATA — from BeefX costing sheet ===================== */
@@ -197,6 +197,10 @@ const PURCHASE_SUPPLIERS = ["Anthropic","Aria's Cheese Store","Best Value (Libis
 const STORAGE_KEY = "beefx-website-v1";
 const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzvJrKTpjKHptA7Ogp2izxttC6zJwhZkaTDYfbGgUQ50wwPyX_bOV4EK3EfVKS6hzUjWQ/exec"; // <-- Paste your Google Apps Script Web App URL between these quotes, then use the "Generate configured copy" button on Setup to bake it in permanently.
 const EQUIPMENT_SUPPLIERS = ["FB Marketplace","Lazada","MK Kitchen","Town Gas"];
+function getAllSuppliers(){
+  const combined = [...new Set([...PURCHASE_SUPPLIERS, ...EQUIPMENT_SUPPLIERS, ...(state.customSuppliers||[])])];
+  return combined.sort((a,b)=>a.localeCompare(b));
+}
 const HISTORICAL_PURCHASES = [
   {item:'Aviko Fries (10kg)',from:'Vista Supreme Food Supply',date:'2026-07-28',category:'Vegetables',price:1100.0,delivery:269.0},
   {item:'Roger\'s Real Eggy Mayo (4 Tubs)',from:'Pandoy\'s Garage',date:'2026-07-28',category:'Condiments',price:3400.0,delivery:0},
@@ -313,6 +317,119 @@ const HISTORICAL_EQUIPMENT = [
   {name:'Griddle Scraper',from:'Lazada',date:'2026-08-24',price:281.0,delivery:0}
 ];
 
+const HISTORICAL_HOME_ORDERS = [
+  {submissionDate:'2026-08-22',deliveryDate:'2026-08-22',slot:'12:00 PM - 1:00 PM',items:[{product:'Combo Siga',qty:1}],name:'Janisse Dimaranan',ig:'janisse_d',mobile:'(0916) 516-6711',payment:'GCash',notes:'Extra awesome sauce on the side please?'},
+  {submissionDate:'2026-08-22',deliveryDate:'2026-08-22',slot:'12:00 PM - 1:00 PM',items:[{product:'BxBacon QTR',qty:2}],name:'Je anne Presado',ig:'jeanne.alodia',mobile:'(0927) 407-5090',payment:'GCash',notes:''},
+  {submissionDate:'2026-08-22',deliveryDate:'2026-08-22',slot:'',items:[{product:'BxBacon QTR',qty:3}],name:'Tini Montelibano',ig:'Tinimontelibano',mobile:'(0919) 287-1171',payment:'Maya',notes:'Extra awesome saucd'},
+  {submissionDate:'2026-08-21',deliveryDate:'2026-08-21',slot:'5:00 PM - 6:00 PM',items:[{product:'BxBacon QTR',qty:1},{product:'Combo Siga',qty:2}],name:'LJ Caminian',ig:'leenamorenahome',mobile:'(0995) 539-4266',payment:'GCash',notes:''},
+  {submissionDate:'2026-08-21',deliveryDate:'2026-08-21',slot:'12:00 PM - 1:00 PM',items:[{product:'Combo Siga',qty:2}],name:'Ramon Velasquez',ig:'https://www.instagram.com/monmonvelasquez?igsi=MWs0anA5MGxzcDd1MA%3D%3D&utm_source=qr',mobile:'(0936) 386-8668',payment:'GCash',notes:'Extra Awesome Sauce'},
+  {submissionDate:'2026-08-21',deliveryDate:'2026-08-21',slot:'5:00 PM - 6:00 PM',items:[{product:'BxBacon QTR',qty:2}],name:'Valerie Dellosa',ig:'fraisemanila',mobile:'(0917) 800-1991',payment:'GoTyme',notes:''},
+  {submissionDate:'2026-08-19',deliveryDate:'2026-08-19',slot:'6:00 PM - 7:00 PM',items:[{product:'BxBacon QTR',qty:1},{product:'Combo Siga',qty:1}],name:'EJ Magnaye',ig:'NA',mobile:'(0926) 022-0698',payment:'GCash',notes:''},
+  {submissionDate:'2026-08-13',deliveryDate:'2026-08-14',slot:'12:00 PM - 1:00 PM',items:[{product:'BxBacon QTR',qty:3}],name:'Lorenzo Tabao',ig:'@enenzot',mobile:'(0977) 335-6748',payment:'GCash',notes:'Extra awesome sauce please'},
+  {submissionDate:'2026-08-06',deliveryDate:'2026-08-06',slot:'6:00 PM - 7:00 PM',items:[{product:'BxBacon QTR',qty:1},{product:'Combo Siga',qty:2}],name:'Kyle Reodique',ig:'kylenereodique',mobile:'(0977) 680-3415',payment:'GCash',notes:''},
+  {submissionDate:'2026-08-06',deliveryDate:'2026-08-08',slot:'12:00 PM - 1:00 PM',items:[{product:'BxBacon QTR',qty:17}],name:'Jan Hung',ig:'@kogamifit',mobile:'(9028) 901-8230',payment:'GoTyme',notes:'Deliver to Body Building Show'},
+  {submissionDate:'2026-08-06',deliveryDate:'2026-08-07',slot:'5:00 PM - 6:00 PM',items:[{product:'Combo Siga',qty:2}],name:'Celine Francisco',ig:'N/A',mobile:'(0998) 570-2305',payment:'GoTyme',notes:'Pick up at 3:00 PM'},
+  {submissionDate:'2026-08-06',deliveryDate:'2026-08-12',slot:'12:00 PM - 1:00 PM',items:[{product:'BxBacon QTR',qty:20}],name:'Charlize Ruth',ig:'@charlizeruth',mobile:'(0956) 083-5250',payment:'GoTyme',notes:'Delivered on Tuesday, August 11.'},
+  {submissionDate:'2026-07-30',deliveryDate:'2026-07-30',slot:'6:00 PM - 7:00 PM',items:[{product:'Combo Siga',qty:2}],name:'Kianne Labrador',ig:'kiannelabrador',mobile:'(6390) 520-8059',payment:'GoTyme',notes:''},
+  {submissionDate:'2026-07-27',deliveryDate:'2026-07-31',slot:'11:00 AM - 12:00 PM',items:[{product:'BxBacon QTR',qty:1},{product:'Combo Siga',qty:1}],name:'Lorenzo Tabao',ig:'@enenzot',mobile:'(0977) 335-6748',payment:'GoTyme',notes:'Extra sauce please'},
+  {submissionDate:'2026-07-23',deliveryDate:'2026-07-23',slot:'11:00 AM - 12:00 PM',items:[{product:'Poutine 120g',qty:1},{product:'Combo Siga',qty:1}],name:'Dianne Madrid',ig:'lil_miss_ac',mobile:'(0917) 894-0915',payment:'GCash',notes:'With everything in it! 😁'},
+  {submissionDate:'2026-07-22',deliveryDate:'2026-07-22',slot:'6:00 PM - 7:00 PM',items:[{product:'Poutine 120g',qty:1},{product:'Combo Siga',qty:2}],name:'Kirby Bandilla',ig:'https://www.instagram.com/kirbydbauer/',mobile:'(0949) 831-1785',payment:'GoTyme',notes:'Extra awesome sauce please ty'},
+  {submissionDate:'2026-07-22',deliveryDate:'2026-07-22',slot:'5:00 PM - 6:00 PM',items:[{product:'BxBacon QTR',qty:2},{product:'Combo Siga',qty:1}],name:'Elaine Bartolome',ig:'LeigneB',mobile:'(0917) 188-0798',payment:'GCash',notes:''},
+  {submissionDate:'2026-07-22',deliveryDate:'2026-07-22',slot:'12:00 PM - 1:00 PM',items:[{product:'BxBacon QTR',qty:1},{product:'Combo Siga',qty:2}],name:'Ila Perez',ig:'mijperez',mobile:'(0917) 576-3177',payment:'Maya',notes:''},
+  {submissionDate:'2026-07-11',deliveryDate:'2026-07-11',slot:'11:00 AM - 12:00 PM',items:[{product:'BxBacon QTR',qty:1},{product:'Combo Siga',qty:1}],name:'Henri Sola',ig:'toyang258',mobile:'(0905) 223-6260',payment:'Maya',notes:'Extra awesome sauce please :)'},
+  {submissionDate:'2026-07-10',deliveryDate:'2026-07-10',slot:'11:00 AM - 12:00 PM',items:[{product:'Combo Siga',qty:2}],name:'Maegan Caburong',ig:'nakatulala',mobile:'(0976) 185-4342',payment:'Maya',notes:''},
+  {submissionDate:'2026-07-09',deliveryDate:'2026-07-10',slot:'12:00 PM - 1:00 PM',items:[{product:'BxBacon QTR',qty:2},{product:'Combo Siga',qty:1}],name:'Nikita Ligot',ig:'@nikitahdah',mobile:'(0917) 854-8661',payment:'GoTyme',notes:'Please separate the cheese from the poutine! thank you!!'},
+  {submissionDate:'2026-07-09',deliveryDate:'2026-07-09',slot:'11:00 AM - 12:00 PM',items:[{product:'BxBacon QTR',qty:4}],name:'Nikki Olaybal',ig:'dupli.the.cate',mobile:'(0919) 008-0075',payment:'GCash',notes:'Extra awesome sauce pls 🙏🙏🙏'},
+  {submissionDate:'2026-07-09',deliveryDate:'2026-07-09',slot:'5:00 PM - 6:00 PM',items:[{product:'BxBacon QTR',qty:3}],name:'Micah Lapuz',ig:'meriemicah',mobile:'(0917) 309-2340',payment:'GoTyme',notes:''},
+  {submissionDate:'2026-07-09',deliveryDate:'2026-07-09',slot:'12:00 PM - 1:00 PM',items:[{product:'Combo Siga',qty:1}],name:'Benj Melvin Bamba',ig:'theblackbamba17',mobile:'(0905) 319-6836',payment:'GCash',notes:'Less onions'},
+  {submissionDate:'2026-07-07',deliveryDate:'2026-07-08',slot:'5:00 PM - 6:00 PM',items:[{product:'BxBacon QTR',qty:2},{product:'Combo Siga',qty:2}],name:'Eloise Bautista',ig:'@eloissssssse',mobile:'(0916) 654-7814',payment:'GCash',notes:''},
+  {submissionDate:'2026-07-06',deliveryDate:'2026-07-08',slot:'12:00 PM - 1:00 PM',items:[{product:'Poutine 120g',qty:3}],name:'Beloved Abigail Gochuico',ig:'belovedabigailm',mobile:'(0919) 005-8291',payment:'GoTyme',notes:''},
+  {submissionDate:'2026-07-04',deliveryDate:'2026-07-04',slot:'5:00 PM - 6:00 PM',items:[{product:'BxBacon QTR',qty:2},{product:'Combo Siga',qty:2}],name:'Micah Lapuz',ig:'meriemicah',mobile:'(0917) 309-2340',payment:'GoTyme',notes:'Pwede po 6pm pick up pls? Thank you :)'},
+  {submissionDate:'2026-07-04',deliveryDate:'2026-07-04',slot:'11:00 AM - 12:00 PM',items:[{product:'BxBacon QTR',qty:1},{product:'Combo Siga',qty:1}],name:'Henri Sola',ig:'@toyang258',mobile:'(0905) 223-6260',payment:'Maya',notes:'Extra awesome sauce po. If pwede 🙏🏻'},
+  {submissionDate:'2026-07-03',deliveryDate:'2026-07-03',slot:'5:00 PM - 6:00 PM',items:[{product:'BxBacon QTR',qty:1},{product:'Combo Siga',qty:1}],name:'Nicole del Castillo',ig:'julsdsea',mobile:'(0945) 772-4760',payment:'GoTyme',notes:'please cut the burgers in half 🙏🏼'},
+  {submissionDate:'2026-07-03',deliveryDate:'2026-07-03',slot:'12:00 PM - 1:00 PM',items:[{product:'BxBacon QTR',qty:4}],name:'Micah Lapuz',ig:'meriemicah',mobile:'(0917) 309-2340',payment:'GoTyme',notes:''},
+  {submissionDate:'2026-07-03',deliveryDate:'2026-07-03',slot:'12:00 PM - 1:00 PM',items:[{product:'Combo Siga',qty:1}],name:'Rafael Maderazo',ig:'rafmdrzo',mobile:'(0968) 540-6489',payment:'GoTyme',notes:''},
+  {submissionDate:'2026-07-02',deliveryDate:'2026-07-02',slot:'5:00 PM - 6:00 PM',items:[{product:'Combo Siga',qty:1}],name:'Anj Garcia',ig:'grciaanjjj',mobile:'(0947) 151-9322',payment:'GoTyme',notes:'Extra ketchup and special sauce hehe'},
+  {submissionDate:'2026-07-02',deliveryDate:'2026-07-02',slot:'5:00 PM - 6:00 PM',items:[{product:'Combo Siga',qty:2}],name:'Liza Macalintal',ig:'Maverick  Macintosh',mobile:'(0915) 525-1101',payment:'GCash',notes:''},
+  {submissionDate:'2026-07-02',deliveryDate:'2026-07-02',slot:'11:00 AM - 12:00 PM',items:[{product:'BxBacon QTR',qty:1},{product:'Combo Siga',qty:1}],name:'Tristan Yuvienco',ig:'tro.tro.y',mobile:'(0917) 882-3056',payment:'GCash',notes:'No onions for combo meal'},
+  {submissionDate:'2026-07-02',deliveryDate:'2026-07-03',slot:'11:00 AM - 12:00 PM',items:[{product:'BxBacon QTR',qty:1},{product:'Combo Siga',qty:1}],name:'Rio Escueta',ig:'ohrio36',mobile:'(0917) 113-1129',payment:'GoTyme',notes:''},
+  {submissionDate:'2026-07-01',deliveryDate:'2026-07-02',slot:'11:00 AM - 12:00 PM',items:[{product:'BxBacon QTR',qty:6}],name:'Micah Lapuz',ig:'meriemicah',mobile:'(0917) 309-2340',payment:'GoTyme',notes:''},
+  {submissionDate:'2026-06-30',deliveryDate:'2026-07-01',slot:'12:00 PM - 1:00 PM',items:[{product:'BxBacon QTR',qty:3}],name:'Debbie Estrada',ig:'debstrd',mobile:'(0923) 847-4394',payment:'GCash',notes:''},
+  {submissionDate:'2026-06-30',deliveryDate:'2026-07-01',slot:'11:00 AM - 12:00 PM',items:[{product:'Combo Siga',qty:1}],name:'Karen Garcia',ig:'keng_dg',mobile:'(0917) 580-1255',payment:'GCash',notes:''},
+  {submissionDate:'2026-06-30',deliveryDate:'2026-07-01',slot:'12:00 PM - 1:00 PM',items:[{product:'BxBacon QTR',qty:1}],name:'Abigail Uy',ig:'abigailuy',mobile:'(0977) 655-2479',payment:'GCash',notes:''},
+  {submissionDate:'2026-06-30',deliveryDate:'2026-07-01',slot:'12:00 PM - 1:00 PM',items:[{product:'BxBacon QTR',qty:2}],name:'Abigail Uy',ig:'@abigailuy',mobile:'(0977) 655-2479',payment:'GCash',notes:'more special sauce please (set aside)'},
+  {submissionDate:'2026-06-27',deliveryDate:'2026-06-27',slot:'6:00 PM - 7:00 PM',items:[{product:'Combo Siga',qty:2}],name:'Edchelle Navarra',ig:'@edchofglory',mobile:'(0917) 301-4635',payment:'GoTyme',notes:''},
+  {submissionDate:'2026-06-26',deliveryDate:'2026-06-26',slot:'6:00 PM - 7:00 PM',items:[{product:'BxBacon QTR',qty:1},{product:'Combo Siga',qty:1}],name:'Emmanuel Joseph Magnaye',ig:'NA',mobile:'(0926) 022-0698',payment:'GCash',notes:''},
+  {submissionDate:'2026-06-26',deliveryDate:'2026-06-26',slot:'12:00 PM - 1:00 PM',items:[{product:'Combo Siga',qty:1}],name:'Rafael Maderazo',ig:'@rafmdrzo',mobile:'(0968) 540-6489',payment:'GoTyme',notes:''},
+  {submissionDate:'2026-06-24',deliveryDate:'2026-06-24',slot:'5:00 PM - 6:00 PM',items:[{product:'Combo Siga',qty:3}],name:'Gab Ochoa',ig:'ochoa.gab',mobile:'(0915) 355-6637',payment:'GCash',notes:''},
+  {submissionDate:'2026-06-24',deliveryDate:'2026-06-24',slot:'11:00 AM - 12:00 PM',items:[{product:'Combo Siga',qty:1}],name:'Jannica De Torres',ig:'jannicaclaire',mobile:'(0927) 213-2963',payment:'GoTyme',notes:'Fewer onions please, more awesome sauce'},
+  {submissionDate:'2026-06-23',deliveryDate:'2026-06-24',slot:'11:00 AM - 12:00 PM',items:[{product:'BxBacon QTR',qty:1},{product:'Combo Siga',qty:1}],name:'Ness Aban',ig:'neshoi',mobile:'(0917) 565-7937',payment:'GCash',notes:''},
+  {submissionDate:'2026-06-23',deliveryDate:'2026-06-24',slot:'12:00 PM - 1:00 PM',items:[{product:'Combo Siga',qty:1}],name:'Ma Angela Maskariño',ig:'N/A, Maan Maskariño on FB/Messenger',mobile:'(0998) 333-2255',payment:'GoTyme',notes:''},
+  {submissionDate:'2026-06-18',deliveryDate:'2026-06-18',slot:'5:00 PM - 6:00 PM',items:[{product:'BxBacon QTR',qty:1}],name:'Polo Dino',ig:'polodinoo',mobile:'(0995) 185-1474',payment:'GoTyme',notes:'no tomato'},
+  {submissionDate:'2026-06-18',deliveryDate:'2026-06-18',slot:'6:00 PM - 7:00 PM',items:[{product:'BxBacon QTR',qty:4}],name:'Sam Apa',ig:'superapalicious',mobile:'(0917) 672-0809',payment:'GCash',notes:''},
+  {submissionDate:'2026-06-17',deliveryDate:'2026-06-17',slot:'5:00 PM - 6:00 PM',items:[{product:'BxBacon QTR',qty:2}],name:'Gab Ochoa',ig:'ochoa.gab',mobile:'(0915) 355-6637',payment:'GCash',notes:''},
+  {submissionDate:'2026-06-17',deliveryDate:'2026-06-17',slot:'5:00 PM - 6:00 PM',items:[{product:'BxBacon QTR',qty:10}],name:'Danielle Lim',ig:'danisisonlim',mobile:'(0917) 188-3264',payment:'GCash',notes:''},
+  {submissionDate:'2026-06-10',deliveryDate:'2026-06-11',slot:'6:00 PM - 7:00 PM',items:[{product:'BxBacon QTR',qty:2}],name:'Julie Batarina',ig:'@mamusoooo',mobile:'(0905) 423-7866',payment:'GCash',notes:''},
+  {submissionDate:'2026-06-09',deliveryDate:'2026-06-10',slot:'6:00 PM - 7:00 PM',items:[{product:'BxBacon QTR',qty:2}],name:'Edchelle Navarra',ig:'@edchofglory',mobile:'(0917) 301-4635',payment:'GCash',notes:''},
+  {submissionDate:'2026-06-07',deliveryDate:'2026-06-10',slot:'6:00 PM - 7:00 PM',items:[{product:'BxBacon QTR',qty:2}],name:'Chey Jose',ig:'@cheyyyjose',mobile:'(0998) 865-2728',payment:'GCash',notes:''},
+  {submissionDate:'2026-06-06',deliveryDate:'2026-06-04',slot:'6:00 PM - 7:00 PM',items:[{product:'BxBacon QTR',qty:4}],name:'Gabbi Dario',ig:'@gabbidario',mobile:'(0915) 999-6914',payment:'GCash',notes:''},
+  {submissionDate:'2026-06-06',deliveryDate:'2026-06-04',slot:'11:00 AM - 12:00 PM',items:[{product:'BxBacon QTR',qty:4}],name:'Jason Gaguan',ig:'@jasongaguan',mobile:'(0956) 083-5250',payment:'GCash',notes:''},
+  {submissionDate:'2026-06-06',deliveryDate:'2026-06-04',slot:'11:00 AM - 12:00 PM',items:[{product:'BxBacon QTR',qty:10}],name:'Jason Gaguan',ig:'@jasongaguan',mobile:'(0956) 083-5250',payment:'GCash',notes:''},
+  {submissionDate:'2026-06-06',deliveryDate:'2026-06-04',slot:'12:00 PM - 1:00 PM',items:[{product:'BxBacon QTR',qty:10}],name:'Jason Gaguan',ig:'@jasongaguan',mobile:'(0956) 083-5250',payment:'GCash',notes:''},
+  {submissionDate:'2026-06-05',deliveryDate:'2026-06-05',slot:'12:00 PM - 1:00 PM',items:[{product:'BxBacon QTR',qty:5}],name:'Carlos VR',ig:'@mustcopmnl ; @carlosv_real',mobile:'(0985) 376-3923',payment:'GCash',notes:''},
+  {submissionDate:'2026-06-05',deliveryDate:'2026-06-05',slot:'12:00 PM - 1:00 PM',items:[{product:'BxBacon QTR',qty:2}],name:'Kirby Bandilla',ig:'kirbybauer',mobile:'(0949) 831-1785',payment:'GCash',notes:''},
+  {submissionDate:'2026-06-04',deliveryDate:'2026-06-03',slot:'5:00 PM - 6:00 PM',items:[{product:'BxBacon QTR',qty:3}],name:'Irene Roxas',ig:'iamirenemd',mobile:'(0956) 083-5250',payment:'GCash',notes:''},
+  {submissionDate:'2026-06-04',deliveryDate:'2026-06-02',slot:'11:00 AM - 12:00 PM',items:[{product:'BxBacon QTR',qty:5}],name:'Loudel Dario',ig:'mldario',mobile:'(0918) 962-2514',payment:'GCash',notes:'Paid for already.'},
+  {submissionDate:'2026-06-03',deliveryDate:'2026-06-03',slot:'5:00 PM - 6:00 PM',items:[{product:'BxBacon QTR',qty:2}],name:'Khay Gonzales',ig:'khay_love',mobile:'(0936) 929-6311',payment:'GCash',notes:'Extra awesome sauce - please separate ty!'},
+  {submissionDate:'2026-05-31',deliveryDate:'2026-06-03',slot:'5:00 PM - 6:00 PM',items:[{product:'BxBacon QTR',qty:2}],name:'EJ Aguado',ig:'auto.grenades',mobile:'(0917) 520-4186',payment:'GCash',notes:'Extra awesome sauce'},
+  {submissionDate:'2026-05-31',deliveryDate:'2026-05-31',slot:'5:00 PM - 6:00 PM',items:[{product:'BxBacon QTR',qty:1}],name:'Diego Dario',ig:'diego5dario',mobile:'(0956) 083-5250',payment:'GCash',notes:''},
+  {submissionDate:'2026-05-31',deliveryDate:'2026-05-31',slot:'12:00 PM - 1:00 PM',items:[{product:'BxBacon QTR',qty:1}],name:'Tita Papa\'s Friend',ig:'@emiliodario7',mobile:'(0956) 083-5250',payment:'GCash',notes:''},
+  {submissionDate:'2026-05-31',deliveryDate:'2026-05-31',slot:'12:00 PM - 1:00 PM',items:[{product:'BxBacon QTR',qty:8}],name:'Jason Gaguan',ig:'@jasongaguan',mobile:'(0956) 083-5250',payment:'GCash',notes:''},
+  {submissionDate:'2026-05-30',deliveryDate:'2026-05-31',slot:'11:00 AM - 12:00 PM',items:[{product:'BxBacon QTR',qty:4}],name:'Hannah Olivas',ig:'phylea',mobile:'(0977) 767-1519',payment:'GCash',notes:''},
+  {submissionDate:'2026-05-29',deliveryDate:'2026-05-29',slot:'',items:[{product:'BxBacon QTR',qty:1}],name:'Lance Diño',ig:'D.ecnal',mobile:'(0927) 662-4749',payment:'GoTyme',notes:''},
+  {submissionDate:'2026-05-29',deliveryDate:'2026-05-29',slot:'11:00 AM - 12:00 PM',items:[{product:'BxBacon QTR',qty:2}],name:'Gio Reyes',ig:'_gioreyes',mobile:'(0917) 817-2565',payment:'GCash',notes:''},
+  {submissionDate:'2026-05-29',deliveryDate:'2026-05-29',slot:'5:00 PM - 6:00 PM',items:[{product:'BxBacon QTR',qty:3}],name:'Fatima Tolentino',ig:'fatolents',mobile:'(0929) 661-9558',payment:'GCash',notes:''},
+  {submissionDate:'2026-05-28',deliveryDate:'2026-05-28',slot:'11:00 AM - 12:00 PM',items:[{product:'BxBacon QTR',qty:2}],name:'Danicor Joyce Cabana',ig:'heyyitsjoycee',mobile:'(0967) 476-3056',payment:'GoTyme',notes:''},
+  {submissionDate:'2026-05-27',deliveryDate:'2026-05-27',slot:'12:00 PM - 1:00 PM',items:[{product:'BxBacon QTR',qty:4}],name:'Andy Garcia',ig:'gnauj_',mobile:'(0915) 594-1295',payment:'GCash',notes:''},
+  {submissionDate:'2026-05-27',deliveryDate:'2026-05-27',slot:'5:00 PM - 6:00 PM',items:[{product:'BxBacon QTR',qty:2}],name:'Kirby Bandilla',ig:'kirbydbauer',mobile:'(0949) 831-1785',payment:'GCash',notes:''},
+  {submissionDate:'2026-05-27',deliveryDate:'2026-05-27',slot:'12:00 PM - 1:00 PM',items:[{product:'BxBacon QTR',qty:2}],name:'EJ Aguado',ig:'@auto.grenades',mobile:'(0917) 520-4186',payment:'GCash',notes:'Extra awesome sauce'},
+  {submissionDate:'2026-05-27',deliveryDate:'2026-05-28',slot:'11:00 AM - 12:00 PM',items:[{product:'BxBacon QTR',qty:2}],name:'Xandra Razonabe',ig:'@mrs_xandyjr',mobile:'(0945) 855-2255',payment:'Maya',notes:''},
+  {submissionDate:'2026-05-26',deliveryDate:'2026-05-27',slot:'6:00 PM - 7:00 PM',items:[{product:'BxBacon QTR',qty:2}],name:'cynthia dipasupil',ig:'@biancamaec_',mobile:'(0962) 985-2532',payment:'GCash',notes:''},
+  {submissionDate:'2026-05-25',deliveryDate:'2026-05-29',slot:'12:00 PM - 1:00 PM',items:[{product:'BxBacon QTR',qty:3}],name:'Yvonne Chua',ig:'mizpah5712',mobile:'(0920) 909-0940',payment:'GCash',notes:''},
+  {submissionDate:'2026-05-25',deliveryDate:'2026-05-29',slot:'11:00 AM - 12:00 PM',items:[{product:'BxBacon QTR',qty:2}],name:'Raymond Esguerra',ig:'inactive in IG',mobile:'(0945) 345-5919',payment:'Maya',notes:'extra awesome sauce'},
+  {submissionDate:'2026-05-25',deliveryDate:'2026-05-28',slot:'11:00 AM - 12:00 PM',items:[{product:'BxBacon QTR',qty:2}],name:'Karen Gay Canedo',ig:'mrs_cab16',mobile:'(0917) 562-4422',payment:'GCash',notes:''},
+  {submissionDate:'2026-05-23',deliveryDate:'2026-05-23',slot:'11:00 AM - 12:00 PM',items:[{product:'BxBacon QTR',qty:1}],name:'Vicky Portchester',ig:'beefxburgers',mobile:'(0927) 711-1314',payment:'GCash',notes:'Old lady friendly'},
+  {submissionDate:'2026-05-23',deliveryDate:'2026-05-23',slot:'6:00 PM - 7:00 PM',items:[{product:'BxBacon QTR',qty:4}],name:'Aryn Cristobal',ig:'arynkingking',mobile:'(0962) 371-1056',payment:'Maya',notes:''},
+  {submissionDate:'2026-05-22',deliveryDate:'2026-05-23',slot:'11:00 AM - 12:00 PM',items:[{product:'BxBacon QTR',qty:2}],name:'Ramon Marfil',ig:'ramon.marfil (facebook)',mobile:'(0917) 500-4450',payment:'GCash',notes:''},
+  {submissionDate:'2026-05-22',deliveryDate:'2026-05-22',slot:'12:00 PM - 1:00 PM',items:[{product:'BxBacon QTR',qty:1}],name:'Anne Dordas',ig:'annestagram',mobile:'(6392) 884-9222',payment:'GCash',notes:''},
+  {submissionDate:'2026-05-22',deliveryDate:'2026-05-22',slot:'5:00 PM - 6:00 PM',items:[{product:'BxBacon QTR',qty:3}],name:'Fatima Tolentino',ig:'fatolents',mobile:'(0929) 661-9558',payment:'GCash',notes:''},
+  {submissionDate:'2026-05-21',deliveryDate:'2026-05-22',slot:'11:00 AM - 12:00 PM',items:[{product:'BxBacon QTR',qty:2}],name:'Chesca Sahagun',ig:'chescasahagun_',mobile:'(0926) 212-3660',payment:'GoTyme',notes:''},
+  {submissionDate:'2026-05-21',deliveryDate:'2026-05-22',slot:'12:00 PM - 1:00 PM',items:[{product:'BxBacon QTR',qty:2}],name:'Ness Aban',ig:'neshoi',mobile:'(0917) 565-7937',payment:'GCash',notes:''},
+  {submissionDate:'2026-05-21',deliveryDate:'2026-05-21',slot:'5:00 PM - 6:00 PM',items:[{product:'BxBacon QTR',qty:2}],name:'Nicole Cruz',ig:'Nikkiczn',mobile:'(0916) 631-0805',payment:'Cash',notes:'Extra sauce'},
+  {submissionDate:'2026-05-21',deliveryDate:'2026-05-21',slot:'12:00 PM - 1:00 PM',items:[{product:'BxBacon QTR',qty:1}],name:'Luis Rana',ig:'@luiiem',mobile:'(0945) 542-0087',payment:'GCash',notes:''},
+  {submissionDate:'2026-05-21',deliveryDate:'2026-05-21',slot:'5:00 PM - 6:00 PM',items:[{product:'BxBacon QTR',qty:2}],name:'Kirby Bandilla',ig:'kirbydbauer',mobile:'(0949) 831-1785',payment:'GCash',notes:''},
+  {submissionDate:'2026-05-20',deliveryDate:'2026-05-21',slot:'6:00 PM - 7:00 PM',items:[{product:'BxBacon QTR',qty:1}],name:'Bianca Salazar',ig:'biancagslzr',mobile:'(0975) 434-3161',payment:'GCash',notes:'extra awesome sauce'},
+  {submissionDate:'2026-05-20',deliveryDate:'2026-05-21',slot:'5:00 PM - 6:00 PM',items:[{product:'BxBacon QTR',qty:2}],name:'Emmanuel Joseph Magnaye',ig:'NA',mobile:'(0926) 022-0698',payment:'GCash',notes:''},
+  {submissionDate:'2026-05-20',deliveryDate:'2026-05-21',slot:'5:00 PM - 6:00 PM',items:[{product:'BxBacon QTR',qty:2}],name:'Havier Llamas',ig:'Havier.lms',mobile:'(0917) 753-2833',payment:'Maya',notes:'Xtra awesome sauce 🙏'},
+  {submissionDate:'2026-05-17',deliveryDate:'2026-05-17',slot:'5:00 PM - 6:00 PM',items:[{product:'BxBacon QTR',qty:2}],name:'Meredith Wren Breva',ig:'@redisumer',mobile:'(0905) 453-5746',payment:'GoTyme',notes:''},
+  {submissionDate:'2026-05-16',deliveryDate:'2026-05-17',slot:'5:00 PM - 6:00 PM',items:[{product:'BxBacon QTR',qty:2}],name:'Jay Cruzada',ig:'jayc_012',mobile:'(0917) 816-0012',payment:'GoTyme',notes:'No ketchup on one of the burgers.'},
+  {submissionDate:'2026-05-15',deliveryDate:'2026-05-16',slot:'11:00 AM - 12:00 PM',items:[{product:'BxBacon QTR',qty:2}],name:'Henri Sola',ig:'toyang258',mobile:'(0905) 223-6260',payment:'Maya',notes:''},
+  {submissionDate:'2026-05-15',deliveryDate:'2026-05-15',slot:'11:00 AM - 12:00 PM',items:[{product:'BxBacon QTR',qty:3}],name:'Jen Ragos',ig:'iamjenragos',mobile:'(0977) 674-9680',payment:'GoTyme',notes:''},
+  {submissionDate:'2026-05-15',deliveryDate:'2026-05-16',slot:'12:00 PM - 1:00 PM',items:[{product:'BxBacon QTR',qty:1}],name:'Isabelle Baguisi',ig:'belle.bgs',mobile:'(0949) 765-5040',payment:'Maya',notes:''},
+  {submissionDate:'2026-05-15',deliveryDate:'2026-05-15',slot:'5:00 PM - 6:00 PM',items:[{product:'BxBacon QTR',qty:3}],name:'Julienne Verano',ig:'unavera',mobile:'(0995) 438-6901',payment:'GoTyme',notes:'pwede po separate extra awesome sauce?'},
+  {submissionDate:'2026-05-15',deliveryDate:'2026-05-16',slot:'11:00 AM - 12:00 PM',items:[{product:'BxBacon QTR',qty:2}],name:'Judea Donato',ig:'@heyjudeaaa',mobile:'(0917) 123-0711',payment:'GoTyme',notes:''},
+  {submissionDate:'2026-05-15',deliveryDate:'2026-05-16',slot:'11:00 AM - 12:00 PM',items:[{product:'BxBacon QTR',qty:5}],name:'André Amorin',ig:'falloutandre_',mobile:'(0917) 859-3153',payment:'Maya',notes:''},
+  {submissionDate:'2026-05-14',deliveryDate:'2026-05-15',slot:'11:00 AM - 12:00 PM',items:[{product:'BxBacon QTR',qty:2}],name:'Beloved Abigail Gochuico',ig:'belovedabigailm',mobile:'(0919) 005-8291',payment:'GoTyme',notes:''},
+  {submissionDate:'2026-05-14',deliveryDate:'2026-05-16',slot:'11:00 AM - 12:00 PM',items:[{product:'BxBacon QTR',qty:4}],name:'Micah Andrew Bule',ig:'@micahbule',mobile:'(0917) 854-0117',payment:'GoTyme',notes:''},
+  {submissionDate:'2026-05-14',deliveryDate:'2026-05-14',slot:'11:00 AM - 12:00 PM',items:[{product:'BxBacon QTR',qty:2}],name:'Samantha Apalisok',ig:'superapalicious',mobile:'(0917) 672-0809',payment:'Maya',notes:''},
+  {submissionDate:'2026-05-14',deliveryDate:'2026-05-14',slot:'12:00 PM - 1:00 PM',items:[{product:'BxBacon QTR',qty:2}],name:'Jen Doroin',ig:'ironandfaith',mobile:'(0917) 856-7300',payment:'GoTyme',notes:''},
+  {submissionDate:'2026-05-13',deliveryDate:'2026-05-14',slot:'6:00 PM - 7:00 PM',items:[{product:'BxBacon QTR',qty:3}],name:'Jethro Francis Cagas',ig:'Jethsss',mobile:'(0921) 363-4204',payment:'GoTyme',notes:''},
+  {submissionDate:'2026-05-13',deliveryDate:'2026-05-14',slot:'12:00 PM - 1:00 PM',items:[{product:'BxBacon QTR',qty:3}],name:'Karen Aspile',ig:'@karenaspile',mobile:'(0917) 159-8983',payment:'Maya',notes:''},
+  {submissionDate:'2026-05-13',deliveryDate:'2026-05-13',slot:'11:00 AM - 12:00 PM',items:[{product:'BxBacon QTR',qty:2}],name:'Gab Ochoa',ig:'ochoa.gab',mobile:'(915) 355-6637',payment:'GoTyme',notes:'None'},
+  {submissionDate:'2026-05-13',deliveryDate:'2026-05-14',slot:'11:00 AM - 12:00 PM',items:[{product:'BxBacon QTR',qty:2}],name:'Patricia Guadines',ig:'patguadines',mobile:'(917) 851-6033',payment:'GoTyme',notes:''},
+  {submissionDate:'2026-05-13',deliveryDate:'2026-05-14',slot:'11:00 AM - 12:00 PM',items:[{product:'BxBacon QTR',qty:2}],name:'Clara Mirabueno',ig:'@clarabelbels',mobile:'(915) 981-7514',payment:'Maya',notes:''},
+];
+
 /* ===================== STATE ===================== */
 function defaultPurchaseLog(){
   return HISTORICAL_PURCHASES.map(p=>({
@@ -326,6 +443,13 @@ function defaultEquipmentLog(){
     status:"Active", location:"Home", notes:""
   }));
 }
+function defaultHomeOrders(){
+  return HISTORICAL_HOME_ORDERS.map(o=>({
+    id: uid("home"), submissionDate:o.submissionDate, deliveryDate:o.deliveryDate, slot:o.slot,
+    items:o.items.map(it=>({product:it.product, qty:it.qty})),
+    name:o.name, ig:o.ig, mobile:o.mobile, payment:o.payment, notes:o.notes
+  }));
+}
 let state = {
   itemOverrides: {},      // name -> {price,amt,unit,threshold,manualAdjustment,servingsPerBatch}
   portionOverrides: {},   // "item|||product" -> qty
@@ -333,9 +457,13 @@ let state = {
   customItems: [],        // user-added inventory items: {name,price,amt,unit}
   equipmentLog: defaultEquipmentLog(),
   purchaseLog: defaultPurchaseLog(),
+  homeOrders: defaultHomeOrders(),
   sauceLog: [],
   popupEvents: [],
   venues: [],
+  tithePayments: [],      // {id, date, amount, notes}
+  supplierDetails: {},    // supplierName -> {contact, notes}
+  customSuppliers: [],    // supplier names added by the user, beyond the built-in lists
   view: "home",
   currentEventId: null,
   currentDayId: null,
@@ -378,9 +506,13 @@ async function loadData(isInitial){
       // this protects the built-in historical defaults on a genuinely first-ever load.
       if(Array.isArray(p.equipmentLog) && p.equipmentLog.length>0) state.equipmentLog = p.equipmentLog;
       if(Array.isArray(p.purchaseLog) && p.purchaseLog.length>0) state.purchaseLog = p.purchaseLog;
+      if(Array.isArray(p.homeOrders) && p.homeOrders.length>0) state.homeOrders = p.homeOrders;
       state.sauceLog = p.sauceLog||[];
       state.popupEvents = p.popupEvents||[];
       state.venues = p.venues||[];
+      state.tithePayments = p.tithePayments||[];
+      state.supplierDetails = p.supplierDetails||{};
+      state.customSuppliers = p.customSuppliers||[];
       syncStatus.lastLoadedAt = Date.now();
     }
     return true;
@@ -400,8 +532,9 @@ async function saveData(){
       headers:{"Content-Type":"text/plain;charset=utf-8"}, // avoids a CORS preflight to Apps Script
       body: JSON.stringify({
         itemOverrides:state.itemOverrides, portionOverrides:state.portionOverrides, priceOverrides:state.priceOverrides,
-        customItems:state.customItems, equipmentLog:state.equipmentLog, purchaseLog:state.purchaseLog, sauceLog:state.sauceLog,
-        popupEvents:state.popupEvents, venues:state.venues
+        customItems:state.customItems, equipmentLog:state.equipmentLog, purchaseLog:state.purchaseLog, homeOrders:state.homeOrders,
+        sauceLog:state.sauceLog, popupEvents:state.popupEvents, venues:state.venues,
+        tithePayments:state.tithePayments, supplierDetails:state.supplierDetails, customSuppliers:state.customSuppliers
       })
     });
     if(!res.ok) throw new Error("HTTP "+res.status);
@@ -509,6 +642,16 @@ function currentStock(name){
       if(a.item===name) stock -= Number(a.qty)||0;
     });
   }));
+  // Home delivery orders cook directly from home stock — no "brought to venue" step
+  // exists for these, so they deduct straight from main inventory when logged.
+  (state.homeOrders||[]).forEach(o=>{
+    o.items.forEach(it=>{
+      const q = it.qty||1;
+      expandForDeduction(it.product).forEach(base=>{
+        stock -= getPortion(name, base) * q;
+      });
+    });
+  });
   if(name==="**Awesome Sauce") stock += state.sauceLog.reduce((a,s)=>a+Number(s.yield||0),0);
   if(name==="Mayonnaise") stock -= state.sauceLog.reduce((a,s)=>a+Number(s.mayoUsed||0),0);
   if(name==="Fresh Basil") stock -= state.sauceLog.reduce((a,s)=>a+Number(s.basilUsed||0),0);
@@ -549,10 +692,12 @@ function reorderList(){
 const TABS = [
   {v:"costing", l:"Costing"},
   {v:"inventory", l:"Inventory"},
+  {v:"homedelivery", l:"Home Delivery"},
   {v:"popup", l:"Pop-Up Tracker"},
   {v:"venues", l:"Venue Analysis"},
   {v:"equipment", l:"Equipment"},
   {v:"purchasing", l:"Purchasing"},
+  {v:"suppliers", l:"Suppliers"},
   {v:"dashboard", l:"Dashboard"}
 ];
 function renderHeader(){
@@ -581,17 +726,23 @@ function render(){
   if(state.view==="home") return renderHome(main);
   if(state.view==="costing") return renderCosting(main);
   if(state.view==="inventory") return renderInventory(main);
+  if(state.view==="homedelivery") return renderHomeDelivery(main);
   if(state.view==="popup") return renderPopup(main);
   if(state.view==="venues") return renderVenues(main);
   if(state.view==="equipment") return renderEquipment(main);
   if(state.view==="purchasing") return renderPurchasing(main);
+  if(state.view==="suppliers") return renderSuppliers(main);
   if(state.view==="dashboard") return renderDashboard(main);
 }
 
 /* ===================== HOME LANDING PAGE ===================== */
 function renderHome(main){
-  let salesRevenue=0, itemsSold=0;
-  state.popupEvents.forEach(ev=>{ const t=eventTotals(ev); salesRevenue+=t.revenue; itemsSold+=t.count; });
+  let popupRevenue=0, itemsSold=0;
+  state.popupEvents.forEach(ev=>{ const t=eventTotals(ev); popupRevenue+=t.revenue; itemsSold+=t.count; });
+  const homeOrders = state.homeOrders||[];
+  const homeRevenue = homeOrders.reduce((a,o)=>a+homeOrderTotal(o),0);
+  itemsSold += homeOrders.reduce((a,o)=>a+o.items.reduce((s,it)=>s+(it.qty||1),0),0);
+  const salesRevenue = popupRevenue + homeRevenue;
   const reorders = reorderList();
   const totalPurchases = state.purchaseLog.reduce((a,p)=>a+Number(p.price||0)+Number(p.delivery||0),0);
   const totalEquipment = state.equipmentLog.reduce((a,e)=>a+Number(e.price||0)+Number(e.delivery||0),0);
@@ -602,7 +753,7 @@ function renderHome(main){
   </div>`;
 
   html += `<div class="stat-row">
-    <div class="stat"><p class="n">${money(salesRevenue)}</p><p class="l">Total pop-up revenue</p></div>
+    <div class="stat"><p class="n">${money(salesRevenue)}</p><p class="l">Total revenue (all channels)</p></div>
     <div class="stat"><p class="n">${itemsSold}</p><p class="l">Items sold, all-time</p></div>
     <div class="stat"><p class="n">${money(totalPurchases)}</p><p class="l">Total purchases logged</p></div>
     <div class="stat"><p class="n">${money(totalEquipment)}</p><p class="l">Equipment invested</p></div>
@@ -638,8 +789,10 @@ function renderHome(main){
 function exportBackup(){
   const data = {
     itemOverrides:state.itemOverrides, portionOverrides:state.portionOverrides, priceOverrides:state.priceOverrides,
-    customItems:state.customItems, equipmentLog:state.equipmentLog, purchaseLog:state.purchaseLog, sauceLog:state.sauceLog,
-    popupEvents:state.popupEvents, venues:state.venues, exportedAt:new Date().toISOString()
+    customItems:state.customItems, equipmentLog:state.equipmentLog, purchaseLog:state.purchaseLog, homeOrders:state.homeOrders,
+    sauceLog:state.sauceLog, popupEvents:state.popupEvents, venues:state.venues,
+    tithePayments:state.tithePayments, supplierDetails:state.supplierDetails, customSuppliers:state.customSuppliers,
+    exportedAt:new Date().toISOString()
   };
   const blob = new Blob([JSON.stringify(data,null,2)], {type:"application/json"});
   const url = URL.createObjectURL(blob);
@@ -662,9 +815,13 @@ function importBackup(e){
       state.customItems = p.customItems||[];
       state.equipmentLog = p.equipmentLog||state.equipmentLog;
       state.purchaseLog = p.purchaseLog||state.purchaseLog;
+      state.homeOrders = p.homeOrders||state.homeOrders;
       state.sauceLog = p.sauceLog||[];
       state.popupEvents = p.popupEvents||[];
       state.venues = p.venues||[];
+      state.tithePayments = p.tithePayments||[];
+      state.supplierDetails = p.supplierDetails||{};
+      state.customSuppliers = p.customSuppliers||[];
       const ok = await saveData();
       if(ok){ showToast("Backup restored"); render(); }
     }catch(err){ showToast("That file couldn't be read — check it's a BeefX backup file"); }
@@ -895,6 +1052,137 @@ function showEditItemSheet(name){
       manualAdjustment: newAdj,
       servingsPerBatch: (state.itemOverrides[name]||{}).servingsPerBatch};
     await saveData(); document.body.removeChild(overlay); render(); showToast("Updated "+name);
+  });
+}
+
+/* ===================== HOME DELIVERY TAB ===================== */
+let homeCart = []; // temporary line items being built for the order currently being logged
+function homeOrderTotal(order){
+  return order.items.reduce((a,it)=>a+sellPrice(it.product)*(it.qty||1), 0);
+}
+function homeOrderCost(order){
+  return order.items.reduce((a,it)=>a+productCost(it.product)*(it.qty||1), 0);
+}
+function renderHomeDelivery(main){
+  const orders = state.homeOrders||[];
+  const totalRevenue = orders.reduce((a,o)=>a+homeOrderTotal(o),0);
+  const totalCost = orders.reduce((a,o)=>a+homeOrderCost(o),0);
+  const totalItems = orders.reduce((a,o)=>a+o.items.reduce((s,it)=>s+(it.qty||1),0),0);
+
+  let html = `<div class="stat-row">
+    <div class="stat"><p class="n">${money(totalRevenue)}</p><p class="l">All-time revenue</p></div>
+    <div class="stat"><p class="n">${orders.length}</p><p class="l">Orders logged</p></div>
+    <div class="stat"><p class="n">${totalItems}</p><p class="l">Items sold</p></div>
+    <div class="stat"><p class="n">${money(totalRevenue-totalCost)}</p><p class="l">Gross profit</p></div>
+  </div>`;
+
+  html += `<div class="card"><h2 style="margin:0 0 10px;font-size:13px;">Log a new order</h2>
+    <label class="field"><span>Delivery date</span><input type="date" id="ho-date" value="${new Date().toISOString().slice(0,10)}"></label>
+    <label class="field"><span>Dispatch window</span>
+      <select id="ho-slot"><option>11:00 AM - 12:00 PM</option><option>12:00 PM - 1:00 PM</option><option>4:00 PM - 5:00 PM</option><option>5:00 PM - 6:00 PM</option><option>Same-day</option></select>
+    </label>
+    <div style="display:flex;gap:8px;margin-bottom:8px;">
+      <select id="ho-product" style="flex:2;">${sellableProducts().map(p=>`<option value="${escapeHtml(p)}">${escapeHtml(productLabel(p))}</option>`).join("")}</select>
+      <input type="number" id="ho-qty" placeholder="qty" value="1" style="flex:1;">
+      <button class="btn small" id="ho-add-item">Add</button>
+    </div>
+    <div id="ho-cart-list" style="margin-bottom:10px;"></div>
+    <label class="field"><span>Customer name</span><input type="text" id="ho-name" placeholder="e.g. Janisse Dimaranan"></label>
+    <label class="field"><span>Instagram handle</span><input type="text" id="ho-ig" placeholder="e.g. janisse_d"></label>
+    <label class="field"><span>Mobile number</span><input type="text" id="ho-mobile" placeholder="e.g. (0916) 516-6711"></label>
+    <label class="field"><span>Payment method</span><select id="ho-payment">${PAYMENTS.map(p=>`<option>${p}</option>`).join("")}</select></label>
+    <label class="field" style="margin-bottom:0;"><span>Notes / special requests</span><input type="text" id="ho-notes" placeholder="optional"></label>
+    <button class="btn primary full" id="ho-submit" style="margin-top:10px;">Log order</button>
+  </div>`;
+
+  html += `<h2 class="sectitle">Search orders</h2>
+  <div class="card"><input type="text" id="ho-search" placeholder="Search by name, IG, or mobile..."></div>`;
+
+  html += `<h2 class="sectitle">Recent orders (${orders.length} total)</h2><div class="card" id="ho-order-list">`;
+  html += renderHomeOrderRows(orders.slice().reverse().slice(0,40));
+  html += `</div>`;
+
+  main.innerHTML = html;
+  renderHomeCart();
+
+  document.getElementById("ho-add-item").addEventListener("click", ()=>{
+    const product = document.getElementById("ho-product").value;
+    const qty = parseFloat(document.getElementById("ho-qty").value)||1;
+    homeCart.push({product, qty});
+    renderHomeCart();
+  });
+
+  document.getElementById("ho-submit").addEventListener("click", async ()=>{
+    if(homeCart.length===0){ showToast("Add at least one item to the order first"); return; }
+    const name = document.getElementById("ho-name").value.trim();
+    const order = {
+      id: uid("home"),
+      submissionDate: new Date().toISOString().slice(0,10),
+      deliveryDate: document.getElementById("ho-date").value,
+      slot: document.getElementById("ho-slot").value,
+      items: homeCart.map(c=>({product:c.product, qty:c.qty})),
+      name, ig: document.getElementById("ho-ig").value.trim(),
+      mobile: document.getElementById("ho-mobile").value.trim(),
+      payment: document.getElementById("ho-payment").value,
+      notes: document.getElementById("ho-notes").value.trim()
+    };
+    state.homeOrders.push(order);
+    homeCart = [];
+    const ok = await saveData();
+    if(ok) showToast("Order logged");
+    render();
+  });
+
+  document.getElementById("ho-search").addEventListener("input", (e)=>{
+    const q = e.target.value.toLowerCase().trim();
+    const filtered = !q ? orders.slice().reverse().slice(0,40) : orders.filter(o=>
+      (o.name||"").toLowerCase().includes(q) || (o.ig||"").toLowerCase().includes(q) || (o.mobile||"").toLowerCase().includes(q)
+    ).reverse();
+    document.getElementById("ho-order-list").innerHTML = renderHomeOrderRows(filtered);
+    attachHomeOrderDeletes();
+  });
+
+  attachHomeOrderDeletes();
+}
+function renderHomeCart(){
+  const el = document.getElementById("ho-cart-list");
+  if(!el) return;
+  if(homeCart.length===0){ el.innerHTML = `<p class="helptext">No items added yet.</p>`; return; }
+  let html = `<div class="card" style="padding:8px 12px;">`;
+  homeCart.forEach((c,i)=>{
+    html += `<div class="logrow"><div class="li-name">${c.qty}x ${escapeHtml(productLabel(c.product))}</div>
+      <div style="display:flex;align-items:center;gap:8px;"><span style="font-weight:800;">${money(sellPrice(c.product)*c.qty)}</span>
+      <button class="li-del" data-cartidx="${i}">&times;</button></div></div>`;
+  });
+  const total = homeCart.reduce((a,c)=>a+sellPrice(c.product)*c.qty,0);
+  html += `<div class="logrow" style="border-top:1.5px solid var(--border);"><div class="li-name">Total</div><div style="font-weight:800;">${money(total)}</div></div>`;
+  html += `</div>`;
+  el.innerHTML = html;
+  el.querySelectorAll("[data-cartidx]").forEach(b=>{
+    b.addEventListener("click", ()=>{
+      homeCart.splice(parseInt(b.getAttribute("data-cartidx")),1);
+      renderHomeCart();
+    });
+  });
+}
+function renderHomeOrderRows(orders){
+  if(orders.length===0) return `<div class="empty-state">No orders found.</div>`;
+  return orders.map(o=>{
+    const itemsStr = o.items.map(it=>`${it.qty}x ${productLabel(it.product)}`).join(", ");
+    return `<div class="logrow"><div>
+      <div class="li-name">${escapeHtml(o.name||"—")} ${o.ig?" · @"+escapeHtml(o.ig):""}</div>
+      <div class="li-meta">${escapeHtml(o.deliveryDate||"")} ${o.slot?"· "+escapeHtml(o.slot):""} · ${escapeHtml(itemsStr)} · ${escapeHtml(o.payment||"")}${o.notes?" · "+escapeHtml(o.notes):""}</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;"><span style="font-weight:800;">${money(homeOrderTotal(o))}</span>
+    <button class="li-del" data-homeorder="${o.id}">&times;</button></div></div>`;
+  }).join("");
+}
+function attachHomeOrderDeletes(){
+  document.querySelectorAll(".li-del[data-homeorder]").forEach(b=>{
+    b.addEventListener("click", async ()=>{
+      state.homeOrders = state.homeOrders.filter(o=>o.id!==b.getAttribute("data-homeorder"));
+      await saveData(); render();
+    });
   });
 }
 
@@ -1210,8 +1498,8 @@ function renderVenueForm(main){
     <label class="field"><span>Dates being considered</span><input type="text" id="v-dates" value="${escapeHtml(v.dates)}" placeholder="e.g. Sep 3-6"></label>
     <label class="field" style="margin-bottom:0;"><span>Stall fee per day (₱)</span><input type="number" id="v-fee" value="${escapeHtml(v.fee)}" placeholder="e.g. 3000"></label>
   </div>`;
-  html += `<div style="height:6px;background:var(--grey);border-radius:99px;overflow:hidden;margin-bottom:6px;"><div style="height:100%;width:${pct}%;background:var(--yel);"></div></div>
-    <p style="font-size:10.5px;color:#888;text-align:right;margin:0 0 12px;">${r.answered} of ${VENUE_TOTAL_Q} answered</p>`;
+  html += `<div style="height:6px;background:var(--grey);border-radius:99px;overflow:hidden;margin-bottom:6px;"><div id="venue-progress-bar" style="height:100%;width:${pct}%;background:var(--yel);"></div></div>
+    <p id="venue-progress-label" style="font-size:10.5px;color:#888;text-align:right;margin:0 0 12px;">${r.answered} of ${VENUE_TOTAL_Q} answered</p>`;
 
   VENUE_SECTIONS.forEach((s,si)=>{
     html += `<div class="cattitle" style="background:${s.color};">${escapeHtml(s.title)}</div>`;
@@ -1234,10 +1522,10 @@ function renderVenueForm(main){
 
   html += `<div class="card" style="background:#FCF3DE;border-color:#F0DFA8;"><p style="font-size:11px;color:#7A5A0A;margin:0;line-height:1.5;"><b>The decision rule:</b> book when the crowd matches BeefX's buyer profile, break-even is achievable on a slow day, and at least one of exposure, acquisition, or profit is clearly present. More than 3 uncertain or negative judgment answers — pass.</p></div>`;
 
-  html += `<div class="card" style="background:${r.color};color:#fff;text-align:center;">
+  html += `<div class="card" id="venue-verdict-card" style="background:${r.color};color:#fff;text-align:center;">
     <p style="font-size:10px;letter-spacing:.08em;text-transform:uppercase;opacity:.85;margin:0 0 4px;">Verdict</p>
-    <p style="font-size:20px;font-weight:900;margin:0 0 6px;">${r.verdict}</p>
-    <p style="font-size:12px;opacity:.92;margin:0;">${r.sub}</p></div>`;
+    <p class="vv-title" style="font-size:20px;font-weight:900;margin:0 0 6px;">${r.verdict}</p>
+    <p class="vv-sub" style="font-size:12px;opacity:.92;margin:0;">${r.sub}</p></div>`;
 
   html += `<div class="btnbar" style="display:flex;gap:8px;margin-top:10px;">
     <button class="btn full" id="venue-delete" style="color:var(--red);">Delete this venue</button>
@@ -1253,6 +1541,10 @@ function renderVenueForm(main){
   document.getElementById("v-pros").addEventListener("change", e=>saveField(()=>v.pros=e.target.value));
   document.getElementById("v-cons").addEventListener("change", e=>saveField(()=>v.cons=e.target.value));
 
+  // Important: none of the question handlers below call render(). Rebuilding the whole
+  // 15-question form on every single tap was wiping out anything typed-but-not-yet-blurred
+  // in OTHER fields on the page. Instead we update only the button styling and the verdict
+  // box in place, so the rest of the form (and whatever you're mid-typing) stays untouched.
   main.querySelectorAll("[data-vqid]").forEach(el=>{
     const id = el.getAttribute("data-vqid");
     const type = el.getAttribute("data-vtype");
@@ -1262,17 +1554,20 @@ function renderVenueForm(main){
           const val = btn.getAttribute("data-val");
           v.answers[id] = (v.answers[id]===val) ? undefined : val;
           if(v.answers[id]===undefined) delete v.answers[id];
-          await saveData(); render();
+          restyleVenueAnswerGroup(el, type, v.answers[id]);
+          updateVenueSummary(v);
+          await saveData();
         });
       });
     } else if(type==="text"){
-      el.addEventListener("change", async ()=>{ v.answers[id]=el.value; await saveData(); render(); });
+      el.addEventListener("change", async ()=>{ v.answers[id]=el.value; updateVenueSummary(v); await saveData(); });
     } else if(type==="dual"){
       el.addEventListener("change", async ()=>{
         const fk = el.getAttribute("data-vfield");
         if(!v.answers[id] || typeof v.answers[id]!=="object") v.answers[id]={};
         v.answers[id][fk] = el.value;
-        await saveData(); render();
+        updateVenueSummary(v);
+        await saveData();
       });
     }
   });
@@ -1285,6 +1580,103 @@ function renderVenueForm(main){
     await saveData(); render();
   });
 }
+// Toggles the tapped button's highlight in place, without touching any other field on the page.
+function restyleVenueAnswerGroup(groupEl, type, selectedVal){
+  groupEl.querySelectorAll("button").forEach(btn=>{
+    const val = btn.getAttribute("data-val");
+    const isSel = val===selectedVal;
+    if(type==="yesno"){
+      btn.style.cssText = isSel
+        ? (val==="yes" ? "background:#E2F0E4;border-color:var(--grn);color:var(--grn);" : val==="no" ? "background:#FBE7E2;border-color:var(--red);color:var(--red);" : "background:#FCEFDD;border-color:var(--amb);color:var(--amb);")
+        : "";
+    } else {
+      // choice type: look up whether this option is the "positive" (green) or "negative" (red) style
+      btn.style.cssText = "";
+      if(isSel) btn.setAttribute("data-needs-style","1");
+    }
+  });
+  if(type==="choice"){
+    // Re-derive styles from VENUE_SECTIONS so we don't need to pass option metadata around.
+    const qid = groupEl.getAttribute("data-vqid");
+    for(const s of VENUE_SECTIONS){
+      for(let qi=0; qi<s.questions.length; qi++){
+        if(vqid(VENUE_SECTIONS.indexOf(s), qi)===qid){
+          const q = s.questions[qi];
+          groupEl.querySelectorAll("button").forEach(btn=>{
+            const val = btn.getAttribute("data-val");
+            if(val===selectedVal){
+              const opt = q.options.find(o=>o.val===val);
+              btn.style.cssText = opt && opt.style==="yes"
+                ? "background:#E2F0E4;border-color:var(--grn);color:var(--grn);"
+                : "background:#FBE7E2;border-color:var(--red);color:var(--red);";
+            }
+          });
+          return;
+        }
+      }
+    }
+  }
+}
+// Recomputes and redraws just the progress bar + verdict card, without rebuilding the form.
+function updateVenueSummary(v){
+  const r = computeVenueVerdict(v);
+  const pct = Math.round((r.answered/VENUE_TOTAL_Q)*100);
+  const bar = document.getElementById("venue-progress-bar");
+  const lbl = document.getElementById("venue-progress-label");
+  const card = document.getElementById("venue-verdict-card");
+  if(bar) bar.style.width = pct+"%";
+  if(lbl) lbl.textContent = r.answered+" of "+VENUE_TOTAL_Q+" answered";
+  if(card){
+    card.style.background = r.color;
+    card.querySelector(".vv-title").textContent = r.verdict;
+    card.querySelector(".vv-sub").textContent = r.sub;
+  }
+}
+
+/* ===================== SUPPLIERS TAB ===================== */
+function renderSuppliers(main){
+  const suppliers = getAllSuppliers();
+  let html = `<div class="card"><h2 style="margin:0 0 10px;font-size:13px;">Add a new supplier</h2>
+    <label class="field"><span>Supplier name</span><input type="text" id="sup-new-name" placeholder="e.g. New Meat Supplier PH"></label>
+    <button class="btn primary full" id="sup-add">Add supplier</button>
+  </div>`;
+
+  html += `<h2 class="sectitle">All suppliers (${suppliers.length})</h2>`;
+  suppliers.forEach(name=>{
+    const d = state.supplierDetails[name]||{};
+    html += `<div class="card" style="margin-bottom:8px;">
+      <p style="font-weight:800;font-size:13px;margin:0 0 8px;">${escapeHtml(name)}</p>
+      <label class="field"><span>Contact info</span><input type="text" data-sup-contact="${escapeHtml(name)}" value="${escapeHtml(d.contact||"")}" placeholder="phone, email, or contact person"></label>
+      <label class="field" style="margin-bottom:0;"><span>Notes</span><input type="text" data-sup-notes="${escapeHtml(name)}" value="${escapeHtml(d.notes||"")}" placeholder="e.g. closed Sundays, needs 1-day lead time"></label>
+    </div>`;
+  });
+
+  main.innerHTML = html;
+  document.getElementById("sup-add").addEventListener("click", async ()=>{
+    const name = document.getElementById("sup-new-name").value.trim();
+    if(!name){ showToast("Enter a supplier name first"); return; }
+    if(getAllSuppliers().includes(name)){ showToast("That supplier already exists"); return; }
+    if(!state.customSuppliers) state.customSuppliers=[];
+    state.customSuppliers.push(name);
+    await saveData(); showToast("Added "+name); render();
+  });
+  main.querySelectorAll("[data-sup-contact]").forEach(el=>{
+    el.addEventListener("change", async ()=>{
+      const name = el.getAttribute("data-sup-contact");
+      if(!state.supplierDetails[name]) state.supplierDetails[name]={};
+      state.supplierDetails[name].contact = el.value;
+      await saveData();
+    });
+  });
+  main.querySelectorAll("[data-sup-notes]").forEach(el=>{
+    el.addEventListener("change", async ()=>{
+      const name = el.getAttribute("data-sup-notes");
+      if(!state.supplierDetails[name]) state.supplierDetails[name]={};
+      state.supplierDetails[name].notes = el.value;
+      await saveData();
+    });
+  });
+}
 
 /* ===================== EQUIPMENT (ASSET REGISTRY) TAB ===================== */
 function renderEquipment(main){
@@ -1292,7 +1684,7 @@ function renderEquipment(main){
   let html = `<div class="card"><h2 style="margin:0 0 10px;font-size:13px;">Add equipment</h2>
     <label class="field"><span>Equipment name</span><input type="text" id="eq-name" placeholder="e.g. Gas Griddle"></label>
     <label class="field"><span>Purchased from</span>
-      <select id="eq-from-select">${EQUIPMENT_SUPPLIERS.map(s=>`<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join("")}<option value="__custom__">Other (type below)...</option></select>
+      <select id="eq-from-select">${getAllSuppliers().map(s=>`<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join("")}<option value="__custom__">Other (type below)...</option></select>
     </label>
     <label class="field" id="eq-from-custom-wrap" style="display:none;"><span>Supplier name</span><input type="text" id="eq-from-custom" placeholder="e.g. New supplier name"></label>
     <label class="field"><span>Date purchased</span><input type="date" id="eq-date" value="${new Date().toISOString().slice(0,10)}"></label>
@@ -1341,7 +1733,7 @@ function renderPurchasing(main){
   let html = `<div class="card"><h2 style="margin:0 0 10px;font-size:13px;">Log a purchase</h2>
     <label class="field"><span>Item</span><input type="text" id="pu-item" placeholder="e.g. Aviko Fries (10kg)"></label>
     <label class="field"><span>Purchased from</span>
-      <select id="pu-from-select">${PURCHASE_SUPPLIERS.map(s=>`<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join("")}<option value="__custom__">Other (type below)...</option></select>
+      <select id="pu-from-select">${getAllSuppliers().map(s=>`<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join("")}<option value="__custom__">Other (type below)...</option></select>
     </label>
     <label class="field" id="pu-from-custom-wrap" style="display:none;"><span>Supplier name</span><input type="text" id="pu-from-custom" placeholder="e.g. New supplier name"></label>
     <label class="field"><span>Date</span><input type="date" id="pu-date" value="${new Date().toISOString().slice(0,10)}"></label>
@@ -1361,16 +1753,11 @@ function renderPurchasing(main){
     ${Object.entries(byCat).map(([c,t])=>`<tr><td>${escapeHtml(c)}</td><td class="num">${money(t)}</td></tr>`).join("")}
     <tr><td style="font-weight:800;">Total purchases</td><td class="num" style="font-weight:800;">${money(total)}</td></tr></table></div>`;
 
-  html += `<h2 class="sectitle">Recent purchases (${state.purchaseLog.length} total)</h2><div class="card">`;
-  if(state.purchaseLog.length===0){ html+=`<div class="empty-state">No purchases logged yet.</div>`; }
-  else {
-    state.purchaseLog.slice().reverse().slice(0,30).forEach(p=>{
-      const t=Number(p.price||0)+Number(p.delivery||0);
-      html += `<div class="logrow"><div><div class="li-name">${escapeHtml(p.item)}</div>
-        <div class="li-meta">${escapeHtml(p.date)} · ${escapeHtml(p.category)} · ${escapeHtml(p.from)}${p.linkedItem?" · restocks "+escapeHtml(p.linkedItem):""}</div></div>
-        <div style="display:flex;align-items:center;gap:8px;"><span style="font-weight:800;">${money(t)}</span><button class="li-del" data-pu="${p.id}">&times;</button></div></div>`;
-    });
-  }
+  html += `<h2 class="sectitle">Search purchases</h2>
+  <div class="card"><input type="text" id="pu-search" placeholder="Search by item, category, or supplier..."></div>`;
+
+  html += `<h2 class="sectitle">Recent purchases (${state.purchaseLog.length} total)</h2><div class="card" id="pu-order-list">`;
+  html += renderPurchaseRows(state.purchaseLog.slice().reverse().slice(0,30));
   html += `</div>`;
   main.innerHTML = html;
 
@@ -1392,15 +1779,44 @@ function renderPurchasing(main){
     if(ok) showToast("Purchase logged");
     render();
   });
-  main.querySelectorAll(".li-del[data-pu]").forEach(b=>b.addEventListener("click", async ()=>{
+  document.getElementById("pu-search").addEventListener("input", (e)=>{
+    const q = e.target.value.toLowerCase().trim();
+    const filtered = !q ? state.purchaseLog.slice().reverse().slice(0,30) : state.purchaseLog.filter(p=>
+      (p.item||"").toLowerCase().includes(q) || (p.category||"").toLowerCase().includes(q) || (p.from||"").toLowerCase().includes(q)
+    ).reverse();
+    document.getElementById("pu-order-list").innerHTML = renderPurchaseRows(filtered);
+    attachPurchaseDeletes();
+  });
+  attachPurchaseDeletes();
+}
+function renderPurchaseRows(rows){
+  if(rows.length===0) return `<div class="empty-state">No purchases found.</div>`;
+  return rows.map(p=>{
+    const t=Number(p.price||0)+Number(p.delivery||0);
+    return `<div class="logrow"><div><div class="li-name">${escapeHtml(p.item)}</div>
+      <div class="li-meta">${escapeHtml(p.date)} · ${escapeHtml(p.category)} · ${escapeHtml(p.from)}${p.linkedItem?" · restocks "+escapeHtml(p.linkedItem):""}</div></div>
+      <div style="display:flex;align-items:center;gap:8px;"><span style="font-weight:800;">${money(t)}</span><button class="li-del" data-pu="${p.id}">&times;</button></div></div>`;
+  }).join("");
+}
+function attachPurchaseDeletes(){
+  document.querySelectorAll(".li-del[data-pu]").forEach(b=>b.addEventListener("click", async ()=>{
     state.purchaseLog=state.purchaseLog.filter(p=>p.id!==b.getAttribute("data-pu")); await saveData(); render();
   }));
 }
 
 /* ===================== DASHBOARD (FINANCIAL ROLLUP) ===================== */
 function renderDashboard(main){
-  let salesRevenue=0, recipeCost=0, itemsSold=0;
-  state.popupEvents.forEach(ev=>{ const t=eventTotals(ev); salesRevenue+=t.revenue; recipeCost+=t.foodCost; itemsSold+=t.count; });
+  let popupRevenue=0, popupCost=0, popupItems=0;
+  state.popupEvents.forEach(ev=>{ const t=eventTotals(ev); popupRevenue+=t.revenue; popupCost+=t.foodCost; popupItems+=t.count; });
+
+  const homeOrders = state.homeOrders||[];
+  const homeRevenue = homeOrders.reduce((a,o)=>a+homeOrderTotal(o),0);
+  const homeCost = homeOrders.reduce((a,o)=>a+homeOrderCost(o),0);
+  const homeItems = homeOrders.reduce((a,o)=>a+o.items.reduce((s,it)=>s+(it.qty||1),0),0);
+
+  const salesRevenue = popupRevenue + homeRevenue;
+  const recipeCost = popupCost + homeCost;
+  const itemsSold = popupItems + homeItems;
   const recipeGrossProfit = salesRevenue - recipeCost;
 
   const totalPurchases = state.purchaseLog.reduce((a,p)=>a+Number(p.price||0)+Number(p.delivery||0),0);
@@ -1410,13 +1826,18 @@ function renderDashboard(main){
   const actualCashProfit = salesRevenue - totalPurchases - totalRent;
   const tithe = Math.max(recipeGrossProfit,0)*0.10;
 
-  let html = `<h2 class="sectitle">Recipe-based margin (from Costing)</h2>
+  let html = `<h2 class="sectitle">Revenue by channel</h2>
+  <div class="stat-row">
+    <div class="stat"><p class="n">${money(homeRevenue)}</p><p class="l">Home delivery revenue</p></div>
+    <div class="stat"><p class="n">${money(popupRevenue)}</p><p class="l">Pop-up revenue</p></div>
+  </div>
+  <h2 class="sectitle">Recipe-based margin (from Costing)</h2>
   <div class="stat-row">
     <div class="stat"><p class="n">${money(salesRevenue)}</p><p class="l">Total revenue</p></div>
     <div class="stat"><p class="n">${itemsSold}</p><p class="l">Items sold</p></div>
   </div>
   <div class="card tablewrap"><table>
-    <tr><td>Total revenue (all pop-ups)</td><td class="num">${money(salesRevenue)}</td></tr>
+    <tr><td>Total revenue (home delivery + pop-ups)</td><td class="num">${money(salesRevenue)}</td></tr>
     <tr><td>Theoretical food cost (recipe × units sold)</td><td class="num">${money(recipeCost)}</td></tr>
     <tr><td style="font-weight:800;">Recipe-based gross profit</td><td class="num" style="font-weight:800;">${money(recipeGrossProfit)}</td></tr>
     <tr><td>Suggested tithe (10% of gross profit)</td><td class="num">${money(tithe)}</td></tr>
@@ -1437,7 +1858,51 @@ function renderDashboard(main){
     <tr><td>Total equipment spend (one-time, not operating cost)</td><td class="num">${money(totalEquipment)}</td></tr>
   </table></div>`;
 
+  // ---- Tithe Ledger ----
+  const totalTitheOwed = Math.max(recipeGrossProfit,0)*0.10;
+  const totalTithePaid = (state.tithePayments||[]).reduce((a,t)=>a+Number(t.amount||0),0);
+  const titheBalance = totalTitheOwed - totalTithePaid;
+  html += `<h2 class="sectitle">Tithe ledger</h2>
+  <div class="card tablewrap"><table>
+    <tr><td>Total owed (10% of all-time gross profit)</td><td class="num">${money(totalTitheOwed)}</td></tr>
+    <tr><td>Total paid</td><td class="num">${money(totalTithePaid)}</td></tr>
+    <tr><td style="font-weight:800;">Balance remaining</td><td class="num" style="font-weight:800;color:${titheBalance>0?'var(--red)':'var(--grn)'};">${money(titheBalance)}</td></tr>
+  </table></div>
+  <div class="card">
+    <h2 style="margin:0 0 10px;font-size:13px;">Log a tithe payment</h2>
+    <label class="field"><span>Date</span><input type="date" id="tithe-date" value="${new Date().toISOString().slice(0,10)}"></label>
+    <label class="field"><span>Amount (₱)</span><input type="number" id="tithe-amount" placeholder="e.g. 1500"></label>
+    <label class="field" style="margin-bottom:0;"><span>Notes</span><input type="text" id="tithe-notes" placeholder="e.g. CCF Makati, for Eastwood pop-up"></label>
+    <button class="btn primary full" id="tithe-submit" style="margin-top:10px;">Log payment</button>
+  </div>`;
+  if((state.tithePayments||[]).length>0){
+    html += `<div class="card" id="tithe-list">`;
+    state.tithePayments.slice().reverse().forEach(t=>{
+      html += `<div class="logrow"><div><div class="li-name">${money(t.amount)}</div>
+        <div class="li-meta">${escapeHtml(t.date)}${t.notes?" · "+escapeHtml(t.notes):""}</div></div>
+        <button class="li-del" data-tithe="${t.id}">&times;</button></div>`;
+    });
+    html += `</div>`;
+  }
+
   main.innerHTML = html;
+
+  document.getElementById("tithe-submit").addEventListener("click", async ()=>{
+    const amount = parseFloat(document.getElementById("tithe-amount").value)||0;
+    if(amount<=0){ showToast("Enter an amount first"); return; }
+    if(!state.tithePayments) state.tithePayments=[];
+    state.tithePayments.push({
+      id: uid("tithe"), date: document.getElementById("tithe-date").value,
+      amount, notes: document.getElementById("tithe-notes").value.trim()
+    });
+    await saveData(); showToast("Payment logged"); render();
+  });
+  document.querySelectorAll(".li-del[data-tithe]").forEach(b=>{
+    b.addEventListener("click", async ()=>{
+      state.tithePayments = state.tithePayments.filter(t=>t.id!==b.getAttribute("data-tithe"));
+      await saveData(); render();
+    });
+  });
 }
 
 function renderSetup(){

@@ -120,6 +120,42 @@
 <div class="toast" id="toast"></div>
 
 <script>
+/* =====================================================================
+   CRITICAL — DO NOT REMOVE OR "SIMPLIFY" ANY OF THE FOLLOWING.
+   Each item below was added to fix a real, confirmed, hard-won bug.
+   Removing any of them WILL bring back a bug that already cost real
+   debugging time to solve. If asked to add features or refactor,
+   preserve every item on this list exactly as-is.
+
+   1. NO automatic background polling / setInterval for loadData().
+      Auto-polling caused stale reads from Google Sheets to silently
+      overwrite fresh local data — even with zero user interaction.
+      Data only loads on page open or an explicit user action
+      (Refresh button, Save button). Do not reintroduce a timer-based
+      refresh loop.
+
+   2. Cache-busting on every GET request (the "cb=" + Date.now()
+      query param) plus {cache:"no-store"} on both GET and POST fetch
+      calls. Without this, Google's infrastructure can serve a cached
+      response from just before a save, making a successful save
+      look like it reverted.
+
+   3. The three <meta> cache-control tags in <head> — these stop the
+      browser/iOS home-screen shortcut from serving a stale cached
+      copy of this file itself.
+
+   4. The backend Apps Script (deployed separately in the user's
+      Google Sheet, NOT part of this file) stores data as one row
+      PER top-level state key (purchaseLog, popupEvents, homeOrders,
+      etc.) rather than one giant JSON blob in a single cell. A
+      single Sheets cell has a hard 50,000-character limit — cramming
+      everything into one cell silently fails once the data grows
+      past that. If the backend script is ever rewritten, it MUST
+      keep this one-row-per-section structure. This file's
+      loadData()/saveData() already assume the backend reassembles/
+      splits a single combined JSON object — that contract must stay
+      the same on both sides.
+   ===================================================================== */
 /* ===================== SOURCE DATA — from BeefX costing sheet ===================== */
 const ITEM_DEFS = [
   {name:"Ground Beef",price:240,amt:1000,unit:"g"},
@@ -463,6 +499,7 @@ let state = {
   purchaseLog: defaultPurchaseLog(),
   homeOrders: defaultHomeOrders(),
   sauceLog: [],
+  batchLog: [],
   popupEvents: [],
   venues: [],
   tithePayments: [],      // {id, date, amount, notes}
@@ -519,6 +556,7 @@ async function loadData(isInitial){
       if(Array.isArray(p.purchaseLog) && p.purchaseLog.length>0) state.purchaseLog = p.purchaseLog;
       if(Array.isArray(p.homeOrders) && p.homeOrders.length>0) state.homeOrders = p.homeOrders;
       state.sauceLog = p.sauceLog||[];
+      state.batchLog = p.batchLog||[];
       state.popupEvents = p.popupEvents||[];
       state.venues = p.venues||[];
       state.tithePayments = p.tithePayments||[];
@@ -540,7 +578,7 @@ async function saveData(){
   const bodyToSend = {
     itemOverrides:state.itemOverrides, portionOverrides:state.portionOverrides, priceOverrides:state.priceOverrides,
     customItems:state.customItems, equipmentLog:state.equipmentLog, purchaseLog:state.purchaseLog, homeOrders:state.homeOrders,
-    sauceLog:state.sauceLog, popupEvents:state.popupEvents, venues:state.venues,
+    sauceLog:state.sauceLog, batchLog:state.batchLog, popupEvents:state.popupEvents, venues:state.venues,
     tithePayments:state.tithePayments, supplierDetails:state.supplierDetails, customSuppliers:state.customSuppliers
   };
   console.log("[BeefX DEBUG] saveData sending popupEvents count:", (bodyToSend.popupEvents||[]).length,
@@ -684,10 +722,32 @@ function currentStock(name){
   if(name==="Mayonnaise") stock -= state.sauceLog.reduce((a,s)=>a+Number(s.mayoUsed||0),0);
   if(name==="Fresh Basil") stock -= state.sauceLog.reduce((a,s)=>a+Number(s.basilUsed||0),0);
   if(name==="Black Pepper - Ground") stock -= state.sauceLog.reduce((a,s)=>a+Number(s.pepperUsed||0),0);
+  // Burger batches: making a batch consumes Ground Beef + a secondary ingredient (bacon bits,
+  // longganisa bits, or whatever a newly-added patty type uses), and adds the finished patties
+  // themselves as stock of their own inventory item.
+  (state.batchLog||[]).forEach(b=>{
+    if(name==="Ground Beef") stock -= Number(b.groundBeefUsed)||0;
+    if(name===b.secondaryItem) stock -= Number(b.secondaryUsed)||0;
+    if(name===b.pattyItemName) stock += Number(b.qtyMade)||0;
+  });
   stock += itemManualAdjustment(name);
   return stock;
 }
 // How much of an item was allocated to a specific pop-up day (brought from home that morning).
+// Maps a sold product to the pre-made finished patty it physically consumes, for pop-up
+// "brought vs sold" tracking specifically. This is separate from the Costing recipe (which
+// still costs burgers from raw Ground Beef + Bacon Bits) — this mapping only exists so that
+// allocating a finished patty to a pop-up day can show it actually being sold down.
+const PATTY_FOR_PRODUCT = {
+  "BxBacon QTR": "BeefX Bacon Patties (Siga)",
+  "BxLongganisa QTR": "BeefX Longganisa Patties (Bongga)",
+  "Combo Siga": "BeefX Bacon Patties (Siga)",
+  "Combo Bongga": "BeefX Longganisa Patties (Bongga)",
+  "BURGER STEAK (BACON)": "BeefX Bacon Patties (Siga)",
+  "BURGER STEAK (BONGGA)": "BeefX Longganisa Patties (Bongga)",
+  "Animal Style Poutine (BACON)": "BeefX Bacon Patties (Siga)",
+  "Animal Style Poutine (BONGGA)": "BeefX Longganisa Patties (Bongga)"
+};
 function dayAllocatedQty(day, itemName){
   return (day.allocations||[]).filter(a=>a.item===itemName).reduce((a,al)=>a+(Number(al.qty)||0),0);
 }
@@ -697,8 +757,16 @@ function daySoldQty(day, itemName){
   let used = 0;
   day.entries.forEach(en=>{
     const q = en.qty||1;
-    expandForDeduction(en.product).forEach(base=>{ used += getPortion(itemName, base) * q; });
+    expandForDeduction(en.product).forEach(base=>{
+      const portionAmt = getPortion(itemName, base) * q;
+      const pattyAmt = (PATTY_FOR_PRODUCT[base]===itemName) ? q : 0;
+      used += portionAmt + pattyAmt;
+      if(portionAmt>0 || pattyAmt>0){
+        console.log("[BeefX DEBUG] daySoldQty match — item:", itemName, "| sold product:", base, "| portion:", portionAmt, "| patty:", pattyAmt);
+      }
+    });
   });
+  console.log("[BeefX DEBUG] daySoldQty TOTAL for", itemName, "=", used, "| day has", day.entries.length, "entries");
   return used;
 }
 function itemThreshold(name){
@@ -736,8 +804,12 @@ function renderHeader(){
       <button id="sync-badge" style="background:none;border:none;font-size:10.5px;color:#aaa;cursor:pointer;padding:4px 8px;"></button>
     </div>
     <div style="display:flex; gap:8px; margin-top:10px;">
-      <button id="manual-save-btn" class="btn primary" style="flex:1; padding:9px;">Save now</button>
-      <button id="manual-refresh-btn" class="btn" style="flex:1; padding:9px; background:transparent; border-color:#444; color:#ddd;">Refresh</button>
+      <button id="manual-save-btn" class="btn primary" title="Save now" style="flex:1; padding:9px; display:flex; align-items:center; justify-content:center;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></svg>
+      </button>
+      <button id="manual-refresh-btn" class="btn" title="Refresh" style="flex:1; padding:9px; background:transparent; border-color:#444; color:#ddd; display:flex; align-items:center; justify-content:center;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></svg>
+      </button>
     </div>
     <div class="navtabs" id="navtabs">
       <button data-v="home" style="${state.view==='home'?'':''}">Home</button>
@@ -824,7 +896,7 @@ function exportBackup(){
   const data = {
     itemOverrides:state.itemOverrides, portionOverrides:state.portionOverrides, priceOverrides:state.priceOverrides,
     customItems:state.customItems, equipmentLog:state.equipmentLog, purchaseLog:state.purchaseLog, homeOrders:state.homeOrders,
-    sauceLog:state.sauceLog, popupEvents:state.popupEvents, venues:state.venues,
+    sauceLog:state.sauceLog, batchLog:state.batchLog, popupEvents:state.popupEvents, venues:state.venues,
     tithePayments:state.tithePayments, supplierDetails:state.supplierDetails, customSuppliers:state.customSuppliers,
     exportedAt:new Date().toISOString()
   };
@@ -851,6 +923,7 @@ function importBackup(e){
       state.purchaseLog = p.purchaseLog||state.purchaseLog;
       state.homeOrders = p.homeOrders||state.homeOrders;
       state.sauceLog = p.sauceLog||[];
+      state.batchLog = p.batchLog||[];
       state.popupEvents = p.popupEvents||[];
       state.venues = p.venues||[];
       state.tithePayments = p.tithePayments||[];
@@ -967,6 +1040,37 @@ function renderInventory(main){
     <button class="btn primary full" id="sauce-submit" style="margin-top:10px;">Log batch</button>
   </div>`;
 
+  html += `<div class="card"><h2 style="margin:0 0 4px;font-size:13px;">Burger batch log</h2>
+    <p class="helptext">Logging a batch deducts the raw ingredients used and adds the finished patties to inventory.</p>
+    <label class="field"><span>Date</span><input type="date" id="batch-date" value="${new Date().toISOString().slice(0,10)}"></label>
+    <label class="field"><span>Patty type</span>
+      <select id="batch-type">
+        <option value="BeefX Bacon">BeefX Bacon Batch</option>
+        <option value="BeefX Longganisa">BeefX Longganisa Batch</option>
+        <option value="__new__">+ New patty type...</option>
+      </select>
+    </label>
+    <div id="batch-new-wrap" style="display:none;">
+      <label class="field"><span>New patty name</span><input type="text" id="batch-new-name" placeholder="e.g. BeefX Sisig"></label>
+      <label class="field"><span>Secondary ingredient this patty uses (besides Ground Beef)</span>
+        <select id="batch-new-secondary">${getAllItems().map(i=>`<option value="${escapeHtml(i.name)}">${escapeHtml(i.name)}</option>`).join("")}</select>
+      </label>
+    </div>
+    <label class="field"><span>Quantity made (pcs)</span><input type="number" id="batch-qty" placeholder="e.g. 90"></label>
+    <label class="field"><span id="batch-beef-label">Ground Beef used (g)</span><input type="number" id="batch-beef" placeholder="e.g. 5130"></label>
+    <label class="field" style="margin-bottom:0;"><span id="batch-secondary-label">Bacon Bits used (g)</span><input type="number" id="batch-secondary" placeholder="e.g. 5130"></label>
+    <button class="btn primary full" id="batch-submit" style="margin-top:10px;">Log batch</button>
+  </div>`;
+  if((state.batchLog||[]).length>0){
+    html += `<div class="card" id="batch-list"><h2 style="margin:0 0 8px;font-size:13px;">Recent batches</h2>`;
+    state.batchLog.slice().reverse().slice(0,15).forEach(b=>{
+      html += `<div class="logrow"><div><div class="li-name">${escapeHtml(b.pattyType)} — ${b.qtyMade} pcs</div>
+        <div class="li-meta">${escapeHtml(b.date)} · Ground Beef ${fmt(b.groundBeefUsed,"g")} · ${escapeHtml(b.secondaryItem)} ${fmt(b.secondaryUsed,"g")}</div></div>
+        <button class="li-del" data-batch="${b.id}">&times;</button></div>`;
+    });
+    html += `</div>`;
+  }
+
   html += `<div class="card"><h2 style="margin:0 0 10px;font-size:13px;">Add a new inventory item</h2>
     <p class="helptext">For packaging and supplies not in Costing — tissue, sporks, plastic gloves, etc.</p>
     <label class="field"><span>Item name</span><input type="text" id="new-item-name" placeholder="e.g. Sporks"></label>
@@ -1001,6 +1105,48 @@ function renderInventory(main){
       pepperUsed: parseFloat(document.getElementById("sauce-pepper").value)||0
     });
     await saveData(); showToast("Batch logged"); render();
+  });
+  document.getElementById("batch-type").addEventListener("change", (e)=>{
+    const isNew = e.target.value==="__new__";
+    document.getElementById("batch-new-wrap").style.display = isNew ? "" : "none";
+    document.getElementById("batch-secondary-label").textContent = isNew ? "Secondary ingredient used (g)" :
+      (e.target.value==="BeefX Bacon" ? "Bacon Bits used (g)" : "Longganisa Bits used (g)");
+  });
+  document.getElementById("batch-submit").addEventListener("click", async ()=>{
+    const typeSel = document.getElementById("batch-type").value;
+    const qtyMade = parseFloat(document.getElementById("batch-qty").value)||0;
+    const groundBeefUsed = parseFloat(document.getElementById("batch-beef").value)||0;
+    const secondaryUsed = parseFloat(document.getElementById("batch-secondary").value)||0;
+    if(qtyMade<=0){ showToast("Enter how many patties were made"); return; }
+
+    let pattyType, pattyItemName, secondaryItem;
+    if(typeSel==="__new__"){
+      const newName = document.getElementById("batch-new-name").value.trim();
+      if(!newName){ showToast("Name the new patty type first"); return; }
+      pattyType = newName;
+      pattyItemName = newName + " Patties";
+      secondaryItem = document.getElementById("batch-new-secondary").value;
+      if(!getAllItems().find(i=>i.name===pattyItemName)){
+        state.customItems.push({name:pattyItemName, price:0, amt:1, unit:"pcs"});
+      }
+    } else if(typeSel==="BeefX Bacon"){
+      pattyType = "BeefX Bacon"; pattyItemName = "BeefX Bacon Patties (Siga)"; secondaryItem = "Bacon Bits";
+    } else {
+      pattyType = "BeefX Longganisa"; pattyItemName = "BeefX Longganisa Patties (Bongga)"; secondaryItem = "Longganisa Bits";
+    }
+
+    if(!state.batchLog) state.batchLog=[];
+    state.batchLog.push({
+      id: uid("batch"), date: document.getElementById("batch-date").value,
+      pattyType, pattyItemName, qtyMade, groundBeefUsed, secondaryItem, secondaryUsed
+    });
+    await saveData(); showToast("Batch logged — inventory updated"); render();
+  });
+  document.querySelectorAll(".li-del[data-batch]").forEach(b=>{
+    b.addEventListener("click", async ()=>{
+      state.batchLog = state.batchLog.filter(x=>x.id!==b.getAttribute("data-batch"));
+      await saveData(); render();
+    });
   });
   document.getElementById("new-item-unit").addEventListener("change", e=>{
     document.getElementById("new-item-unit-custom-wrap").style.display = e.target.value==="__custom__" ? "" : "none";

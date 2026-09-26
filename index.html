@@ -232,6 +232,11 @@ const BASE_PORTIONS = {
 };
 const PAYMENTS = ["Cash","GCash","GoTyme"];
 const PURCHASE_CATEGORIES = ["Protein","Vegetables","Dairy","Condiments","Packaging","Buns","Supplies","Transport","Pop Up Fee","Other"];
+// COGS-relevant categories are ingredient/packaging restocks already priced into the Costing
+// recipe engine — they are NOT double-counted as Operating Expenses. Everything else (when
+// tagged Operations, not Personal) is a real Operating Expense for Net Profit purposes.
+const COGS_PURCHASE_CATEGORIES = ["Protein","Vegetables","Dairy","Condiments","Buns","Packaging"];
+const OPEX_PURCHASE_CATEGORIES = ["Supplies","Transport","Pop Up Fee","Other"];
 const PURCHASE_SUPPLIERS = ["Anthropic","Aria's Cheese Store","Best Value (Libis)","CCF Makati","CDO Food Store Cubao","Cuptain Events","Ever Gotesco","FB Marketplace","Facebook Market Place","Farmer's Cubao","Foothold Reality","Gas","Kenneth Dela Cruz","Kian Monte","Laser Digital Printing","Liberty Print Store","Lucy Nyl","Manors Store","Marketplace Capitol","N/A","Packaging Lab PH","Pandoy's Garage","Parking","Patrick Abunales","Pickaroo","Rafa (DocZ)","Robinson's Eastwood","Suki Market (Mayon)","The Baker's Choice","The Meat District PH","Thomas Murillo","Tijel's Homemade","True Value","Vista Supreme Food Supply"];
 const STORAGE_KEY = "beefx-website-v1";
 const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzvJrKTpjKHptA7Ogp2izxttC6zJwhZkaTDYfbGgUQ50wwPyX_bOV4EK3EfVKS6hzUjWQ/exec"; // <-- Paste your Google Apps Script Web App URL between these quotes, then use the "Generate configured copy" button on Setup to bake it in permanently.
@@ -273,7 +278,7 @@ const HISTORICAL_PURCHASES = [
   {item:'Longganisa Tester (Hamonado, Bongga R&D)',from:'Patrick Abunales',date:'2026-08-06',category:'Protein',price:90.0,delivery:142.0},
   {item:'Longganisa 5kg (Hamonado, Bongga R&D)',from:'Patrick Abunales',date:'2026-08-07',category:'Protein',price:1450.0,delivery:167.0},
   {item:'White Onion (2pcs)',from:'Manors Store',date:'2026-08-08',category:'Vegetables',price:30.0,delivery:0},
-  {item:'Withdraw for personal funds',from:'N/A',date:'2026-08-08',category:'Other',price:1810.0,delivery:0},
+  {item:'Withdraw for personal funds',from:'N/A',date:'2026-08-08',category:'Other',price:1810.0,delivery:0,expenseType:'Personal'},
   {item:'Black Gloves (100 pcs)',from:'Farmer\'s Cubao',date:'2026-08-10',category:'Supplies',price:250.0,delivery:0},
   {item:'Burger Plastic (300 pcs)',from:'Farmer\'s Cubao',date:'2026-08-10',category:'Supplies',price:90.0,delivery:0},
   {item:'Plastic Gloves (100 pcs)',from:'Farmer\'s Cubao',date:'2026-08-10',category:'Supplies',price:50.0,delivery:0},
@@ -288,8 +293,8 @@ const HISTORICAL_PURCHASES = [
   {item:'BeefX Stickers (Logo, Bacon, Longganisa)',from:'Liberty Print Store',date:'2026-08-10',category:'Packaging',price:1300.0,delivery:150.0},
   {item:'Burger Buns (90 Pcs)',from:'Tijel\'s Homemade',date:'2026-08-10',category:'Buns',price:825.0,delivery:0},
   {item:'90/10 Ground Beef (10kg)',from:'The Meat District PH',date:'2026-08-10',category:'Protein',price:2400.0,delivery:150.0},
-  {item:'Donation to Kuya Tom Morillo',from:'N/A',date:'2026-08-10',category:'Other',price:1000.0,delivery:0},
-  {item:'Personal Withdraw of Funds',from:'Rafa (DocZ)',date:'2026-08-16',category:'Other',price:4400.0,delivery:0},
+  {item:'Donation to Kuya Tom Morillo',from:'N/A',date:'2026-08-10',category:'Other',price:1000.0,delivery:0,expenseType:'Personal'},
+  {item:'Personal Withdraw of Funds',from:'Rafa (DocZ)',date:'2026-08-16',category:'Other',price:4400.0,delivery:0,expenseType:'Personal'},
   {item:'Eastwood City Pop Up Fee',from:'Cuptain Events',date:'2026-08-24',category:'Pop Up Fee',price:5000.0,delivery:0},
   {item:'Medium Take Out Bag (100 pcs)',from:'Packaging Lab PH',date:'2026-08-24',category:'Packaging',price:240.0,delivery:117.0},
   {item:'Kraft Bowl with Lid 500 mL (50 pcs)',from:'Packaging Lab PH',date:'2026-08-24',category:'Packaging',price:575.0,delivery:0},
@@ -473,7 +478,8 @@ const HISTORICAL_HOME_ORDERS = [
 function defaultPurchaseLog(){
   return HISTORICAL_PURCHASES.map(p=>({
     id: uid("pu"), item:p.item, from:p.from, date:p.date, category:p.category,
-    price:p.price, delivery:p.delivery, linkedItem:null, qtyReceived:0
+    price:p.price, delivery:p.delivery, linkedItem:null, qtyReceived:0,
+    expenseType: p.expenseType || "Operations", recurring: p.recurring!==undefined ? p.recurring : null
   }));
 }
 function defaultEquipmentLog(){
@@ -505,6 +511,9 @@ let state = {
   tithePayments: [],      // {id, date, amount, notes}
   supplierDetails: {},    // supplierName -> {contact, notes}
   customSuppliers: [],    // supplier names added by the user, beyond the built-in lists
+  itemArchived: {},       // itemName -> true if archived/no longer in use (hidden, not deleted)
+  ownerDrawLog: [],        // {id, date, amount, source, notes} — actual draws taken, vs the computed 15% guideline
+  reserveFloor: 10000,     // cash reserve floor the user wants to keep untouched
   view: "home",
   currentEventId: null,
   currentDayId: null,
@@ -562,6 +571,9 @@ async function loadData(isInitial){
       state.tithePayments = p.tithePayments||[];
       state.supplierDetails = p.supplierDetails||{};
       state.customSuppliers = p.customSuppliers||[];
+      state.itemArchived = p.itemArchived||{};
+      state.ownerDrawLog = p.ownerDrawLog||[];
+      state.reserveFloor = p.reserveFloor!==undefined ? p.reserveFloor : 10000;
       syncStatus.lastLoadedAt = Date.now();
     }
     return true;
@@ -579,7 +591,8 @@ async function saveData(){
     itemOverrides:state.itemOverrides, portionOverrides:state.portionOverrides, priceOverrides:state.priceOverrides,
     customItems:state.customItems, equipmentLog:state.equipmentLog, purchaseLog:state.purchaseLog, homeOrders:state.homeOrders,
     sauceLog:state.sauceLog, batchLog:state.batchLog, popupEvents:state.popupEvents, venues:state.venues,
-    tithePayments:state.tithePayments, supplierDetails:state.supplierDetails, customSuppliers:state.customSuppliers
+    tithePayments:state.tithePayments, supplierDetails:state.supplierDetails, customSuppliers:state.customSuppliers,
+    itemArchived:state.itemArchived, ownerDrawLog:state.ownerDrawLog, reserveFloor:state.reserveFloor
   };
   console.log("[BeefX DEBUG] saveData sending popupEvents count:", (bodyToSend.popupEvents||[]).length,
     "| entries total:", (bodyToSend.popupEvents||[]).reduce((a,e)=>a+e.days.reduce((b,d)=>b+d.entries.length,0),0));
@@ -636,6 +649,8 @@ function escapeHtml(s){ if(s===undefined||s===null) return ""; return String(s).
 
 /* ===================== CORE COSTING ENGINE (mirrors the sheet's SUMPRODUCT) ===================== */
 function getAllItems(){ return [...ITEM_DEFS, ...state.customItems]; }
+function isArchived(name){ return !!(state.itemArchived && state.itemArchived[name]); }
+function activeItems(){ return getAllItems().filter(i=>!isArchived(i.name)); }
 function itemCfg(name){
   const def = getAllItems().find(i=>i.name===name) || {price:0,amt:1,unit:""};
   const ov = state.itemOverrides[name]||{};
@@ -778,7 +793,7 @@ function itemManualAdjustment(name){
   return ov.manualAdjustment!==undefined ? ov.manualAdjustment : 0;
 }
 function reorderList(){
-  return getAllItems().filter(i=>{
+  return activeItems().filter(i=>{
     const th=itemThreshold(i.name);
     return th>0 && currentStock(i.name)<=th;
   });
@@ -898,6 +913,7 @@ function exportBackup(){
     customItems:state.customItems, equipmentLog:state.equipmentLog, purchaseLog:state.purchaseLog, homeOrders:state.homeOrders,
     sauceLog:state.sauceLog, batchLog:state.batchLog, popupEvents:state.popupEvents, venues:state.venues,
     tithePayments:state.tithePayments, supplierDetails:state.supplierDetails, customSuppliers:state.customSuppliers,
+    itemArchived:state.itemArchived, ownerDrawLog:state.ownerDrawLog, reserveFloor:state.reserveFloor,
     exportedAt:new Date().toISOString()
   };
   const blob = new Blob([JSON.stringify(data,null,2)], {type:"application/json"});
@@ -929,6 +945,9 @@ function importBackup(e){
       state.tithePayments = p.tithePayments||[];
       state.supplierDetails = p.supplierDetails||{};
       state.customSuppliers = p.customSuppliers||[];
+      state.itemArchived = p.itemArchived||{};
+      state.ownerDrawLog = p.ownerDrawLog||[];
+      state.reserveFloor = p.reserveFloor!==undefined ? p.reserveFloor : 10000;
       const ok = await saveData();
       if(ok){ showToast("Backup restored"); render(); }
     }catch(err){ showToast("That file couldn't be read — check it's a BeefX backup file"); }
@@ -979,7 +998,7 @@ function renderCosting(main){
   <p class="helptext">Edit price, package size, unit, or any portion. Everything above recalculates instantly.</p>
   <div class="card tablewrap">
   <table><tr><th>Ingredient</th><th>Price ₱</th><th>Pkg amt</th><th>Unit</th>${sellableProducts().filter(p=>!COMBOS.find(c=>c.name===p)).map(p=>`<th>${escapeHtml(productLabel(p).split(" (")[0])}</th>`).join("")}</tr>`;
-  ITEM_DEFS.forEach(it=>{
+  ITEM_DEFS.filter(it=>!isArchived(it.name)).forEach(it=>{
     const cfg = itemCfg(it.name);
     html += `<tr>
       <td>${escapeHtml(it.name)}</td>
@@ -1053,7 +1072,7 @@ function renderInventory(main){
     <div id="batch-new-wrap" style="display:none;">
       <label class="field"><span>New patty name</span><input type="text" id="batch-new-name" placeholder="e.g. BeefX Sisig"></label>
       <label class="field"><span>Secondary ingredient this patty uses (besides Ground Beef)</span>
-        <select id="batch-new-secondary">${getAllItems().map(i=>`<option value="${escapeHtml(i.name)}">${escapeHtml(i.name)}</option>`).join("")}</select>
+        <select id="batch-new-secondary">${activeItems().map(i=>`<option value="${escapeHtml(i.name)}">${escapeHtml(i.name)}</option>`).join("")}</select>
       </label>
     </div>
     <label class="field"><span>Quantity made (pcs)</span><input type="number" id="batch-qty" placeholder="e.g. 90"></label>
@@ -1088,10 +1107,22 @@ function renderInventory(main){
   </div>`;
 
   html += `<div class="cattitle">Costing ingredients</div>`;
-  ITEM_DEFS.forEach(i=> html += itemRowHtml(i.name));
-  if(state.customItems.length>0){
+  ITEM_DEFS.filter(i=>!isArchived(i.name)).forEach(i=> html += itemRowHtml(i.name));
+  const activeCustom = state.customItems.filter(i=>!isArchived(i.name));
+  if(activeCustom.length>0){
     html += `<div class="cattitle">Custom items</div>`;
-    state.customItems.forEach(i=> html += itemRowHtml(i.name, true));
+    activeCustom.forEach(i=> html += itemRowHtml(i.name, true));
+  }
+  const archivedItems = getAllItems().filter(i=>isArchived(i.name));
+  if(archivedItems.length>0){
+    html += `<div class="cattitle" style="background:#888;">Archived (no longer used)</div>
+    <p class="helptext">Hidden from active lists and dropdowns, but history stays intact. Un-archive anytime.</p>`;
+    archivedItems.forEach(i=>{
+      html += `<div class="item-row" data-archived-item="${escapeHtml(i.name)}" style="opacity:.65;">
+        <div class="top"><div><div class="iname">${escapeHtml(i.name)}</div></div>
+        <button class="btn small" data-unarchive="${escapeHtml(i.name)}">Un-archive</button></div>
+      </div>`;
+    });
   }
   main.innerHTML = html;
 
@@ -1164,9 +1195,18 @@ function renderInventory(main){
     await saveData(); showToast("Added "+name); render();
   });
   main.querySelectorAll(".item-row").forEach(row=>{
+    if(row.hasAttribute("data-archived-item")) return; // archived rows only un-archive, no edit sheet
     row.addEventListener("click", (e)=>{
       if(e.target.closest(".li-del")) return;
       showEditItemSheet(row.getAttribute("data-item"));
+    });
+  });
+  main.querySelectorAll("[data-unarchive]").forEach(b=>{
+    b.addEventListener("click", async (e)=>{
+      e.stopPropagation();
+      const name = b.getAttribute("data-unarchive");
+      delete state.itemArchived[name];
+      await saveData(); render(); showToast("Un-archived "+name);
     });
   });
   main.querySelectorAll(".li-del[data-custom]").forEach(b=>{
@@ -1217,11 +1257,16 @@ function showEditItemSheet(name){
     <label class="field"><span>Reorder threshold (${escapeHtml(cfg.unit||"")})</span><input type="number" id="edit-threshold" value="${th}" placeholder="0 = no alert"></label>
     <p class="helptext">To change price, package size, unit, or recipe portions, edit them on the Costing tab — that's the source of truth for this item.</p>
     <button class="btn primary full" id="save-item">Save</button>
+    <button class="btn full" id="archive-item" style="margin-top:8px;color:var(--red);">Archive — no longer used</button>
     <button class="btn full" id="cancel-item" style="margin-top:8px;">Cancel</button>
   </div>`;
   document.body.appendChild(overlay);
   overlay.addEventListener("click", e=>{ if(e.target===overlay) document.body.removeChild(overlay); });
   document.getElementById("cancel-item").addEventListener("click", ()=>document.body.removeChild(overlay));
+  document.getElementById("archive-item").addEventListener("click", async ()=>{
+    state.itemArchived[name] = true;
+    await saveData(); document.body.removeChild(overlay); render(); showToast("Archived "+name);
+  });
   document.getElementById("save-item").addEventListener("click", async ()=>{
     if(!state.itemOverrides[name]) state.itemOverrides[name]={};
     const c=itemCfg(name);
@@ -1378,15 +1423,38 @@ function dayTotals(day){
     byProduct[en.product]=(byProduct[en.product]||0)+q;
     byPayment[en.payment]=(byPayment[en.payment]||0)+price;
   });
-  const grossProfit=revenue, netProfit=grossProfit-foodCost, rent=Number(day.rent)||0;
-  const profit=netProfit-rent, tithe=netProfit*0.10;
-  return {revenue,count,byProduct,byPayment,foodCost,grossProfit,netProfit,rent,profit,tithe};
+  const rent = Number(day.rent)||0;
+  const laborCost = Number(day.laborCost)||0;
+  const opExFromLog = (day.expenses||[]).filter(x=>x.category==="Operations").reduce((a,x)=>a+(Number(x.amount)||0),0);
+  const personalSpend = (day.expenses||[]).filter(x=>x.category==="Personal").reduce((a,x)=>a+(Number(x.amount)||0),0);
+  // Corrected terminology: Gross Profit = Revenue − COGS (food cost). "Profit" before this fix
+  // was actually mislabeled — what used to be called grossProfit was just revenue restated,
+  // and what used to be called netProfit was actually gross profit. Fixed here for good.
+  const grossProfit = revenue - foodCost;
+  const grossMarginPct = revenue>0 ? (grossProfit/revenue*100) : 0;
+  const primeCost = foodCost + laborCost;
+  const primeCostPct = revenue>0 ? (primeCost/revenue*100) : 0;
+  const opExTotal = rent + laborCost + opExFromLog;
+  const netProfit = grossProfit - opExTotal;
+  const ownerDraw15 = netProfit>0 ? netProfit*0.15 : 0;
+  const tithe = grossProfit>0 ? grossProfit*0.10 : 0;
+  return {revenue,count,byProduct,byPayment,foodCost,grossProfit,grossMarginPct,rent,laborCost,
+    opExFromLog,opExTotal,primeCost,primeCostPct,netProfit,ownerDraw15,tithe,personalSpend,
+    profit:netProfit /* kept for any legacy reference — now correctly equals true net profit */};
 }
 function eventTotals(ev){
-  let revenue=0,count=0,foodCost=0,rentTotal=0;
-  ev.days.forEach(d=>{ const t=dayTotals(d); revenue+=t.revenue; count+=t.count; foodCost+=t.foodCost; rentTotal+=t.rent; });
-  const grossProfit=revenue, netProfit=grossProfit-foodCost, profit=netProfit-rentTotal, tithe=netProfit*0.10;
-  return {revenue,count,foodCost,grossProfit,netProfit,rentTotal,profit,tithe};
+  let revenue=0,count=0,foodCost=0,rentTotal=0,laborTotal=0,opExTotal=0,personalTotal=0;
+  ev.days.forEach(d=>{ const t=dayTotals(d); revenue+=t.revenue; count+=t.count; foodCost+=t.foodCost;
+    rentTotal+=t.rent; laborTotal+=t.laborCost; opExTotal+=t.opExTotal; personalTotal+=t.personalSpend; });
+  const grossProfit = revenue - foodCost;
+  const grossMarginPct = revenue>0 ? (grossProfit/revenue*100) : 0;
+  const primeCost = foodCost + laborTotal;
+  const primeCostPct = revenue>0 ? (primeCost/revenue*100) : 0;
+  const netProfit = grossProfit - opExTotal;
+  const ownerDraw15 = netProfit>0 ? netProfit*0.15 : 0;
+  const tithe = grossProfit>0 ? grossProfit*0.10 : 0;
+  return {revenue,count,foodCost,grossProfit,grossMarginPct,rentTotal,laborTotal,opExTotal,
+    primeCost,primeCostPct,netProfit,ownerDraw15,tithe,personalTotal,profit:netProfit};
 }
 function renderPopup(main){
   if(!state.currentEventId) return renderPopupHome(main);
@@ -1413,7 +1481,7 @@ function renderPopupHome(main){
     const name=document.getElementById("new-name").value.trim();
     if(!name){ showToast("Add a pop-up name first"); return; }
     const dates=document.getElementById("new-dates").value.trim();
-    const ev={id:uid("ev"),name,dates,days:[{id:uid("day"),label:"Day 1",entries:[],rent:0,allocations:[]}]};
+    const ev={id:uid("ev"),name,dates,days:[{id:uid("day"),label:"Day 1",entries:[],rent:0,laborCost:0,allocations:[],expenses:[]}]};
     state.popupEvents.push(ev); state.currentEventId=ev.id; state.currentDayId=ev.days[0].id;
     await saveData(); render();
   });
@@ -1438,6 +1506,22 @@ function renderPopupEvent(main){
   html += `<div class="daytabs" id="daytabs">`;
   ev.days.forEach(d=>html+=`<button data-day="${d.id}" class="${d.id===day.id?'active':''}">${escapeHtml(d.label)}</button>`);
   html += `<button class="addday" id="add-day">+ add day</button></div>`;
+
+  html += `<div class="card"><h2 style="margin:0 0 8px;font-size:13px;">Budget vs Actual (whole event)</h2>
+    <div style="display:flex;gap:8px;margin-bottom:8px;">
+      <div style="flex:1;"><span style="font-size:10.5px;color:#888;">Budgeted rent</span><input type="number" id="budget-rent" value="${(ev.budget&&ev.budget.rent)||''}" placeholder="₱"></div>
+      <div style="flex:1;"><span style="font-size:10.5px;color:#888;">Budgeted labor</span><input type="number" id="budget-labor" value="${(ev.budget&&ev.budget.labor)||''}" placeholder="₱"></div>
+      <div style="flex:1;"><span style="font-size:10.5px;color:#888;">Budgeted ingredients</span><input type="number" id="budget-ingredients" value="${(ev.budget&&ev.budget.ingredients)||''}" placeholder="₱"></div>
+    </div>
+    <button class="btn small" id="budget-save">Save budget</button>
+    ${ev.budget?`<div class="tablewrap" style="margin-top:10px;"><table>
+      <tr><th></th><th style="text-align:right;">Budget</th><th style="text-align:right;">Actual</th><th style="text-align:right;">Variance</th></tr>
+      <tr><td>Rent</td><td class="num">${money(ev.budget.rent||0)}</td><td class="num">${money(et.rentTotal)}</td><td class="num" style="color:${et.rentTotal<=(ev.budget.rent||0)?'var(--grn)':'var(--red)'};">${money((ev.budget.rent||0)-et.rentTotal)}</td></tr>
+      <tr><td>Labor</td><td class="num">${money(ev.budget.labor||0)}</td><td class="num">${money(et.laborTotal)}</td><td class="num" style="color:${et.laborTotal<=(ev.budget.labor||0)?'var(--grn)':'var(--red)'};">${money((ev.budget.labor||0)-et.laborTotal)}</td></tr>
+      <tr><td>Ingredients</td><td class="num">${money(ev.budget.ingredients||0)}</td><td class="num">${money(et.foodCost)}</td><td class="num" style="color:${et.foodCost<=(ev.budget.ingredients||0)?'var(--grn)':'var(--red)'};">${money((ev.budget.ingredients||0)-et.foodCost)}</td></tr>
+    </table></div>`:`<p class="helptext" style="margin-top:8px;">Set a budget above to track actual spend against your plan for this event.</p>`}
+  </div>`;
+
   html += `<div class="stat-row"><div class="stat"><p class="n">${money(dt.revenue)}</p><p class="l">Today's revenue</p></div>
     <div class="stat"><p class="n">${dt.count}</p><p class="l">Items sold today</p></div></div>`;
 
@@ -1445,7 +1529,7 @@ function renderPopupEvent(main){
   <div class="card">
     <p class="helptext">Log what you physically loaded and brought to the venue this morning — this is what leaves your main Inventory. Sales below don't deduct home stock again; they just show how much of what you brought is left at the booth.</p>
     <div style="display:flex;gap:8px;margin-bottom:8px;">
-      <select id="alloc-item" style="flex:2;">${getAllItems().map(i=>`<option value="${escapeHtml(i.name)}">${escapeHtml(i.name)}</option>`).join("")}</select>
+      <select id="alloc-item" style="flex:2;">${activeItems().map(i=>`<option value="${escapeHtml(i.name)}">${escapeHtml(i.name)}</option>`).join("")}</select>
       <input type="number" id="alloc-qty" placeholder="qty" style="flex:1;">
       <button class="btn primary small" id="alloc-add">Add</button>
     </div>
@@ -1471,17 +1555,64 @@ function renderPopupEvent(main){
   });
   html += `</div>`;
 
+  // Live, uncapped item-sold summary — aggregated per product, recalculated fresh on every
+  // render (i.e. immediately after every sale), so this never needs a manual data pull again.
+  if(dt.count>0){
+    html += `<h2 class="sectitle">Items sold today (live)</h2><div class="card tablewrap"><table>
+      <tr><th>Product</th><th style="text-align:right;">Qty</th><th style="text-align:right;">Revenue</th></tr>`;
+    Object.entries(dt.byProduct).sort((a,b)=>b[1]-a[1]).forEach(([prod,qty])=>{
+      html += `<tr><td>${escapeHtml(productLabel(prod))}</td><td class="num">${qty}</td><td class="num">${money(sellPrice(prod)*qty)}</td></tr>`;
+    });
+    html += `<tr><td style="font-weight:800;">Total</td><td class="num" style="font-weight:800;">${dt.count}</td><td class="num" style="font-weight:800;">${money(dt.revenue)}</td></tr>
+    </table></div>`;
+  }
+
   html += `<h2 class="sectitle">Today's profitability</h2><div class="card">
     <label class="field" style="margin-bottom:10px;"><span>Rent for today (₱)</span>
     <input type="text" inputmode="decimal" id="rent-input" value="${day.rent?day.rent:''}" placeholder="e.g. 4500"></label>
+    <label class="field" style="margin-bottom:0;"><span>Labor cost for today (₱)</span>
+    <input type="text" inputmode="decimal" id="labor-input" value="${day.laborCost?day.laborCost:''}" placeholder="e.g. staff wages for this day"></label>
+  </div>`;
+
+  html += `<div class="card">
+    <h2 style="margin:0 0 10px;font-size:13px;">Day expenses</h2>
+    <p class="helptext">Anything you spend during the day, tagged Personal or Operations. Personal spend is tracked for your visibility only — it never touches Revenue, Cost, or Profit below.</p>
+    <label class="field"><span>Description</span><input type="text" id="exp-desc" placeholder="e.g. lunch for myself, SLEX toll"></label>
+    <label class="field"><span>Amount (₱)</span><input type="number" id="exp-amount" placeholder="e.g. 150"></label>
+    <label class="field" style="margin-bottom:0;"><span>Category</span>
+      <select id="exp-category"><option value="Operations">Operations</option><option value="Personal">Personal</option></select>
+    </label>
+    <button class="btn primary full" id="exp-add" style="margin-top:10px;">Add expense</button>
+  </div>`;
+  if((day.expenses||[]).length>0){
+    html += `<div class="card" id="exp-list">`;
+    day.expenses.slice().reverse().forEach(x=>{
+      html += `<div class="logrow"><div><div class="li-name">${escapeHtml(x.description)}</div>
+        <div class="li-meta">${x.category==="Personal"?'<span style="color:var(--amb);">Personal</span>':'Operations'}</div></div>
+        <div style="display:flex;align-items:center;gap:8px;"><span style="font-weight:800;">${money(x.amount)}</span>
+        <button class="li-del" data-exp="${x.id}">&times;</button></div></div>`;
+    });
+    html += `</div>`;
+  }
+
+  html += `<div class="card">
+    <h2 style="margin:0 0 8px;font-size:13px;">Financial breakdown</h2>
     <div class="tablewrap"><table>
-      <tr><td>Food cost</td><td class="num">${money(dt.foodCost)}</td></tr>
-      <tr><td>Gross profit</td><td class="num">${money(dt.grossProfit)}</td></tr>
-      <tr><td>Net profit</td><td class="num">${money(dt.netProfit)}</td></tr>
+      <tr><td>Revenue</td><td class="num">${money(dt.revenue)}</td></tr>
+      <tr><td>Food cost (COGS)</td><td class="num">${money(dt.foodCost)}</td></tr>
+      <tr><td style="font-weight:800;">Gross profit</td><td class="num" style="font-weight:800;">${money(dt.grossProfit)}</td></tr>
+      <tr><td>Gross margin</td><td class="num">${dt.grossMarginPct.toFixed(1)}%</td></tr>
+      <tr><td>Prime cost (food + labor)</td><td class="num">${money(dt.primeCost)} (${dt.primeCostPct.toFixed(1)}%)</td></tr>
       <tr><td>Rent</td><td class="num">${money(dt.rent)}</td></tr>
-      <tr><td style="font-weight:800;">Profit</td><td class="num" style="font-weight:800;color:${dt.profit>=0?'var(--grn)':'var(--red)'};">${money(dt.profit)}</td></tr>
-      <tr><td>Tithe (10% of net)</td><td class="num">${money(dt.tithe)}</td></tr>
-    </table></div></div>`;
+      <tr><td>Labor</td><td class="num">${money(dt.laborCost)}</td></tr>
+      <tr><td>Other operating expenses</td><td class="num">${money(dt.opExFromLog)}</td></tr>
+      <tr><td style="font-weight:800;">Net profit</td><td class="num" style="font-weight:800;color:${dt.netProfit>=0?'var(--grn)':'var(--red)'};">${money(dt.netProfit)}</td></tr>
+      <tr><td>Tithe (10% of gross profit)</td><td class="num">${money(dt.tithe)}</td></tr>
+      <tr><td style="font-weight:800;color:var(--nvy);">Owner's Draw (15% of net profit)</td><td class="num" style="font-weight:800;color:var(--nvy);">${money(dt.ownerDraw15)}</td></tr>
+      ${dt.personalSpend>0?`<tr><td style="color:var(--amb);">Personal spend today (not counted above)</td><td class="num" style="color:var(--amb);">${money(dt.personalSpend)}</td></tr>`:""}
+    </table></div>
+    <button class="btn primary full" id="record-draw" style="margin-top:10px;">Record this Owner's Draw as taken</button>
+  </div>`;
 
   if(dt.count>0){
     html += `<h2 class="sectitle">Recent entries</h2><div class="card">`;
@@ -1502,13 +1633,46 @@ function renderPopupEvent(main){
 
   main.innerHTML = html;
   document.getElementById("back-home").addEventListener("click", ()=>{ state.currentEventId=null; render(); });
+  document.getElementById("budget-save").addEventListener("click", async ()=>{
+    ev.budget = {
+      rent: parseFloat(document.getElementById("budget-rent").value)||0,
+      labor: parseFloat(document.getElementById("budget-labor").value)||0,
+      ingredients: parseFloat(document.getElementById("budget-ingredients").value)||0
+    };
+    await saveData(); showToast("Budget saved"); render();
+  });
   document.querySelectorAll("#daytabs button[data-day]").forEach(b=>b.addEventListener("click",()=>{state.currentDayId=b.getAttribute("data-day");render();}));
   document.getElementById("add-day").addEventListener("click", async ()=>{
-    const nd={id:uid("day"),label:"Day "+(ev.days.length+1),entries:[],rent:0,allocations:[]};
+    const nd={id:uid("day"),label:"Day "+(ev.days.length+1),entries:[],rent:0,laborCost:0,allocations:[],expenses:[]};
     ev.days.push(nd); state.currentDayId=nd.id; await saveData(); render();
   });
   document.getElementById("rent-input").addEventListener("change", async e=>{
     day.rent=parseFloat(e.target.value)||0; await saveData(); render();
+  });
+  document.getElementById("labor-input").addEventListener("change", async e=>{
+    day.laborCost=parseFloat(e.target.value)||0; await saveData(); render();
+  });
+  document.getElementById("exp-add").addEventListener("click", async ()=>{
+    const description = document.getElementById("exp-desc").value.trim();
+    const amount = parseFloat(document.getElementById("exp-amount").value)||0;
+    const category = document.getElementById("exp-category").value;
+    if(!description){ showToast("Add a description first"); return; }
+    if(amount<=0){ showToast("Enter an amount first"); return; }
+    if(!day.expenses) day.expenses=[];
+    day.expenses.push({id:uid("exp"), description, amount, category, date:new Date().toISOString().slice(0,10)});
+    await saveData(); showToast("Expense logged"); render();
+  });
+  document.querySelectorAll(".li-del[data-exp]").forEach(b=>{
+    b.addEventListener("click", async ()=>{
+      day.expenses = (day.expenses||[]).filter(x=>x.id!==b.getAttribute("data-exp"));
+      await saveData(); render();
+    });
+  });
+  document.getElementById("record-draw").addEventListener("click", async ()=>{
+    if(dt.ownerDraw15<=0){ showToast("No positive owner's draw to record for today"); return; }
+    if(!state.ownerDrawLog) state.ownerDrawLog=[];
+    state.ownerDrawLog.push({id:uid("draw"), date:new Date().toISOString().slice(0,10), amount:dt.ownerDraw15, source:ev.name+" — "+day.label, notes:""});
+    await saveData(); showToast("Owner's Draw of "+money(dt.ownerDraw15)+" recorded"); render();
   });
   document.getElementById("alloc-add").addEventListener("click", async ()=>{
     const item = document.getElementById("alloc-item").value;
@@ -1866,10 +2030,16 @@ function renderPurchasing(main){
     <label class="field" id="pu-from-custom-wrap" style="display:none;"><span>Supplier name</span><input type="text" id="pu-from-custom" placeholder="e.g. New supplier name"></label>
     <label class="field"><span>Date</span><input type="date" id="pu-date" value="${new Date().toISOString().slice(0,10)}"></label>
     <label class="field"><span>Category</span><select id="pu-cat">${PURCHASE_CATEGORIES.map(c=>`<option>${c}</option>`).join("")}</select></label>
+    <label class="field"><span>Expense type</span>
+      <select id="pu-expensetype"><option value="Operations">Operations (business expense)</option><option value="Personal">Personal (excluded from business profit)</option></select>
+    </label>
     <label class="field"><span>Price paid (₱)</span><input type="number" id="pu-price" placeholder="e.g. 1100"></label>
     <label class="field"><span>Delivery fee (₱)</span><input type="number" id="pu-delivery" placeholder="0"></label>
+    <label class="field"><span>Recurring?</span>
+      <select id="pu-recurring"><option value="">Not classified</option><option value="true">Recurring (happens regularly)</option><option value="false">One-time</option></select>
+    </label>
     <label class="field"><span>Link to inventory item (optional)</span>
-      <select id="pu-link"><option value="">— not inventory-linked —</option>${getAllItems().map(i=>`<option value="${escapeHtml(i.name)}">${escapeHtml(i.name)}</option>`).join("")}</select>
+      <select id="pu-link"><option value="">— not inventory-linked —</option>${activeItems().map(i=>`<option value="${escapeHtml(i.name)}">${escapeHtml(i.name)}</option>`).join("")}</select>
     </label>
     <label class="field" style="margin-bottom:0;"><span>Quantity received (in item's unit, if linked)</span><input type="number" id="pu-qty" placeholder="e.g. 10000 for 10kg"></label>
     <button class="btn primary full" id="pu-submit" style="margin-top:10px;">Log purchase</button>
@@ -1897,11 +2067,14 @@ function renderPurchasing(main){
     if(!item){ showToast("Add an item name first"); return; }
     const fromSel = document.getElementById("pu-from-select").value;
     const from = fromSel==="__custom__" ? document.getElementById("pu-from-custom").value.trim() : fromSel;
+    const recurringVal = document.getElementById("pu-recurring").value;
     state.purchaseLog.push({
       id:uid("pu"), item, from,
       date:document.getElementById("pu-date").value, category:document.getElementById("pu-cat").value,
       price:parseFloat(document.getElementById("pu-price").value)||0, delivery:parseFloat(document.getElementById("pu-delivery").value)||0,
-      linkedItem:document.getElementById("pu-link").value||null, qtyReceived:parseFloat(document.getElementById("pu-qty").value)||0
+      linkedItem:document.getElementById("pu-link").value||null, qtyReceived:parseFloat(document.getElementById("pu-qty").value)||0,
+      expenseType: document.getElementById("pu-expensetype").value,
+      recurring: recurringVal==="" ? null : recurringVal==="true"
     });
     const ok = await saveData();
     if(ok) showToast("Purchase logged");
@@ -1921,7 +2094,7 @@ function renderPurchaseRows(rows){
   if(rows.length===0) return `<div class="empty-state">No purchases found.</div>`;
   return rows.map(p=>{
     const t=Number(p.price||0)+Number(p.delivery||0);
-    return `<div class="logrow"><div><div class="li-name">${escapeHtml(p.item)}</div>
+    return `<div class="logrow"><div><div class="li-name">${escapeHtml(p.item)}${p.expenseType==="Personal"?' <span style="color:var(--amb);font-weight:700;">· Personal</span>':""}</div>
       <div class="li-meta">${escapeHtml(p.date)} · ${escapeHtml(p.category)} · ${escapeHtml(p.from)}${p.linkedItem?" · restocks "+escapeHtml(p.linkedItem):""}</div></div>
       <div style="display:flex;align-items:center;gap:8px;"><span style="font-weight:800;">${money(t)}</span><button class="li-del" data-pu="${p.id}">&times;</button></div></div>`;
   }).join("");
@@ -1934,8 +2107,9 @@ function attachPurchaseDeletes(){
 
 /* ===================== DASHBOARD (FINANCIAL ROLLUP) ===================== */
 function renderDashboard(main){
-  let popupRevenue=0, popupCost=0, popupItems=0;
-  state.popupEvents.forEach(ev=>{ const t=eventTotals(ev); popupRevenue+=t.revenue; popupCost+=t.foodCost; popupItems+=t.count; });
+  let popupRevenue=0, popupCost=0, popupItems=0, popupLabor=0, popupOpExLog=0, popupPersonal=0, popupRent=0;
+  state.popupEvents.forEach(ev=>{ const t=eventTotals(ev); popupRevenue+=t.revenue; popupCost+=t.foodCost; popupItems+=t.count;
+    popupLabor+=t.laborTotal; popupOpExLog+=(t.opExTotal-t.rentTotal-t.laborTotal); popupPersonal+=t.personalTotal; popupRent+=t.rentTotal; });
 
   const homeOrders = state.homeOrders||[];
   const homeRevenue = homeOrders.reduce((a,o)=>a+homeOrderTotal(o),0);
@@ -1945,49 +2119,111 @@ function renderDashboard(main){
   const salesRevenue = popupRevenue + homeRevenue;
   const recipeCost = popupCost + homeCost;
   const itemsSold = popupItems + homeItems;
-  const recipeGrossProfit = salesRevenue - recipeCost;
+  const grossProfit = salesRevenue - recipeCost;
+  const grossMarginPct = salesRevenue>0 ? (grossProfit/salesRevenue*100) : 0;
+  const primeCost = recipeCost + popupLabor;
+  const primeCostPct = salesRevenue>0 ? (primeCost/salesRevenue*100) : 0;
 
+  // Purchasing log split cleanly: COGS-category purchases are restocks already priced into
+  // Costing (not double-counted here); OpEx-category purchases tagged "Operations" are real
+  // operating spend; anything tagged "Personal" is excluded entirely from business profit.
+  const purchaseOpEx = state.purchaseLog.filter(p=>OPEX_PURCHASE_CATEGORIES.includes(p.category) && p.expenseType!=="Personal")
+    .reduce((a,p)=>a+Number(p.price||0)+Number(p.delivery||0),0);
+  const purchasePersonal = state.purchaseLog.filter(p=>p.expenseType==="Personal")
+    .reduce((a,p)=>a+Number(p.price||0)+Number(p.delivery||0),0);
   const totalPurchases = state.purchaseLog.reduce((a,p)=>a+Number(p.price||0)+Number(p.delivery||0),0);
-  const totalRent = state.popupEvents.reduce((a,ev)=>a+eventTotals(ev).rentTotal,0);
   const totalEquipment = state.equipmentLog.reduce((a,e)=>a+Number(e.price||0)+Number(e.delivery||0),0);
 
-  const actualCashProfit = salesRevenue - totalPurchases - totalRent;
-  const tithe = Math.max(recipeGrossProfit,0)*0.10;
+  const opExTotal = popupRent + popupLabor + popupOpExLog + purchaseOpEx;
+  const netProfit = grossProfit - opExTotal;
+  const totalPersonalSpend = popupPersonal + purchasePersonal;
 
   let html = `<h2 class="sectitle">Revenue by channel</h2>
   <div class="stat-row">
     <div class="stat"><p class="n">${money(homeRevenue)}</p><p class="l">Home delivery revenue</p></div>
     <div class="stat"><p class="n">${money(popupRevenue)}</p><p class="l">Pop-up revenue</p></div>
   </div>
-  <h2 class="sectitle">Recipe-based margin (from Costing)</h2>
+
+  <h2 class="sectitle">Revenue → Net Profit (proper P&L)</h2>
   <div class="stat-row">
     <div class="stat"><p class="n">${money(salesRevenue)}</p><p class="l">Total revenue</p></div>
     <div class="stat"><p class="n">${itemsSold}</p><p class="l">Items sold</p></div>
   </div>
   <div class="card tablewrap"><table>
-    <tr><td>Total revenue (home delivery + pop-ups)</td><td class="num">${money(salesRevenue)}</td></tr>
-    <tr><td>Theoretical food cost (recipe × units sold)</td><td class="num">${money(recipeCost)}</td></tr>
-    <tr><td style="font-weight:800;">Recipe-based gross profit</td><td class="num" style="font-weight:800;">${money(recipeGrossProfit)}</td></tr>
-    <tr><td>Suggested tithe (10% of gross profit)</td><td class="num">${money(tithe)}</td></tr>
+    <tr><td>Revenue</td><td class="num">${money(salesRevenue)}</td></tr>
+    <tr><td>Food cost (COGS)</td><td class="num">${money(recipeCost)}</td></tr>
+    <tr><td style="font-weight:800;">Gross Profit</td><td class="num" style="font-weight:800;">${money(grossProfit)}</td></tr>
+    <tr><td>Gross Margin</td><td class="num">${grossMarginPct.toFixed(1)}%</td></tr>
+    <tr><td>Prime Cost (food + labor)</td><td class="num">${money(primeCost)} (${primeCostPct.toFixed(1)}%)</td></tr>
+    <tr><td>Rent (all pop-ups)</td><td class="num">${money(popupRent)}</td></tr>
+    <tr><td>Labor (all pop-ups)</td><td class="num">${money(popupLabor)}</td></tr>
+    <tr><td>Other Operating Expenses</td><td class="num">${money(popupOpExLog+purchaseOpEx)}</td></tr>
+    <tr><td style="font-weight:800;">Net Profit</td><td class="num" style="font-weight:800;color:${netProfit>=0?'var(--grn)':'var(--red)'};">${money(netProfit)}</td></tr>
   </table></div>
-  <p class="helptext">This tells you what your margin SHOULD be based on your recipes. Use it for pricing decisions.</p>
+  <p class="helptext">Gross Margin is a healthy F&B business's most important ratio — 30–40% is typical after food cost alone. Prime Cost (food + labor combined) is usually best kept under 60–65% of revenue.</p>
+  ${totalPersonalSpend>0?`<div class="card" style="background:#FCF3DE;border-color:#F0DFA8;"><p style="font-size:11.5px;color:#7A5A0A;margin:0;">Personal spend tracked separately: <b>${money(totalPersonalSpend)}</b> — already excluded from every number above.</p></div>`:""}
 
-  <h2 class="sectitle">Actual cash profit (real spend)</h2>
+  <h2 class="sectitle">Capital invested (CapEx)</h2>
   <div class="card tablewrap"><table>
-    <tr><td>Total revenue</td><td class="num">${money(salesRevenue)}</td></tr>
-    <tr><td>Total ingredient/consumable purchases</td><td class="num">${money(totalPurchases)}</td></tr>
-    <tr><td>Total pop-up rent (logged in tracker)</td><td class="num">${money(totalRent)}</td></tr>
-    <tr><td style="font-weight:800;">Actual cash profit</td><td class="num" style="font-weight:800; color:${actualCashProfit>=0?'var(--grn)':'var(--red)'};">${money(actualCashProfit)}</td></tr>
+    <tr><td>Total equipment spend (one-time, never counted against profit)</td><td class="num">${money(totalEquipment)}</td></tr>
   </table></div>
-  <p class="helptext">This reflects real money in vs out — includes waste, buffer stock, and non-recipe spend the theoretical margin above doesn't capture.</p>
 
-  <h2 class="sectitle">Capital invested</h2>
+  <h2 class="sectitle">Contribution margin by product</h2>
+  <div class="card tablewrap"><table><tr><th>Product</th><th style="text-align:right;">Price</th><th style="text-align:right;">Variable cost</th><th style="text-align:right;">Contribution</th></tr>`;
+  sellableProducts().forEach(p=>{
+    const price = sellPrice(p), cost = productCost(p), contrib = price-cost;
+    html += `<tr><td>${escapeHtml(productLabel(p))}</td><td class="num">${money(price)}</td><td class="num">${money(cost)}</td><td class="num" style="font-weight:700;">${money(contrib)}</td></tr>`;
+  });
+  html += `</table></div>
+  <p class="helptext">This ranks products by profit per unit sold — not the same as which sells the most volume.</p>
+
+  <h2 class="sectitle">Venue comparison</h2>
+  <div class="card tablewrap"><table><tr><th>Venue</th><th style="text-align:right;">Revenue</th><th style="text-align:right;">Prime Cost %</th><th style="text-align:right;">Net Profit</th></tr>`;
+  state.popupEvents.forEach(ev=>{
+    const t = eventTotals(ev);
+    html += `<tr><td>${escapeHtml(ev.name)}</td><td class="num">${money(t.revenue)}</td><td class="num">${t.primeCostPct.toFixed(1)}%</td>
+      <td class="num" style="color:${t.netProfit>=0?'var(--grn)':'var(--red)'};">${money(t.netProfit)}</td></tr>`;
+  });
+  html += `</table></div>
+
+  <h2 class="sectitle">Cash position</h2>
+  <div class="card">
+    <label class="field" style="margin-bottom:10px;"><span>Reserve floor — cash you never want to dip below (₱)</span>
+    <input type="number" id="reserve-floor-input" value="${state.reserveFloor||0}"></label>
+    <div class="tablewrap"><table>
+      <tr><td>All-time Net Profit</td><td class="num">${money(netProfit)}</td></tr>
+      <tr><td>Reserve floor</td><td class="num">${money(state.reserveFloor||0)}</td></tr>
+      <tr><td style="font-weight:800;">Spendable cushion above reserve</td><td class="num" style="font-weight:800;color:${(netProfit-(state.reserveFloor||0))>=0?'var(--grn)':'var(--red)'};">${money(netProfit-(state.reserveFloor||0))}</td></tr>
+    </table></div>
+    <p class="helptext">This compares cumulative Net Profit against your stated floor — it's a guide, not a live bank balance, since it doesn't know your actual cash on hand.</p>
+  </div>`;
+
+  // ---- Owner's Draw Ledger ----
+  const totalDrawTaken = (state.ownerDrawLog||[]).reduce((a,d)=>a+Number(d.amount||0),0);
+  html += `<h2 class="sectitle">Owner's Draw ledger</h2>
   <div class="card tablewrap"><table>
-    <tr><td>Total equipment spend (one-time, not operating cost)</td><td class="num">${money(totalEquipment)}</td></tr>
-  </table></div>`;
+    <tr><td>Suggested draw so far (15% of Net Profit)</td><td class="num">${money(Math.max(netProfit,0)*0.15)}</td></tr>
+    <tr><td style="font-weight:800;">Actually drawn (recorded)</td><td class="num" style="font-weight:800;">${money(totalDrawTaken)}</td></tr>
+  </table></div>
+  <div class="card">
+    <h2 style="margin:0 0 10px;font-size:13px;">Record a draw manually</h2>
+    <label class="field"><span>Date</span><input type="date" id="draw-date" value="${new Date().toISOString().slice(0,10)}"></label>
+    <label class="field"><span>Amount (₱)</span><input type="number" id="draw-amount" placeholder="e.g. 1000"></label>
+    <label class="field" style="margin-bottom:0;"><span>Notes</span><input type="text" id="draw-notes" placeholder="optional"></label>
+    <button class="btn primary full" id="draw-submit" style="margin-top:10px;">Record draw</button>
+  </div>`;
+  if((state.ownerDrawLog||[]).length>0){
+    html += `<div class="card" id="draw-list">`;
+    state.ownerDrawLog.slice().reverse().forEach(d=>{
+      html += `<div class="logrow"><div><div class="li-name">${money(d.amount)}</div>
+        <div class="li-meta">${escapeHtml(d.date)}${d.source?" · "+escapeHtml(d.source):""}${d.notes?" · "+escapeHtml(d.notes):""}</div></div>
+        <button class="li-del" data-draw="${d.id}">&times;</button></div>`;
+    });
+    html += `</div>`;
+  }
 
   // ---- Tithe Ledger ----
-  const totalTitheOwed = Math.max(recipeGrossProfit,0)*0.10;
+  const totalTitheOwed = Math.max(grossProfit,0)*0.10;
   const totalTithePaid = (state.tithePayments||[]).reduce((a,t)=>a+Number(t.amount||0),0);
   const titheBalance = totalTitheOwed - totalTithePaid;
   html += `<h2 class="sectitle">Tithe ledger</h2>
@@ -2015,6 +2251,25 @@ function renderDashboard(main){
 
   main.innerHTML = html;
 
+  document.getElementById("reserve-floor-input").addEventListener("change", async e=>{
+    state.reserveFloor = parseFloat(e.target.value)||0; await saveData(); render();
+  });
+  document.getElementById("draw-submit").addEventListener("click", async ()=>{
+    const amount = parseFloat(document.getElementById("draw-amount").value)||0;
+    if(amount<=0){ showToast("Enter an amount first"); return; }
+    if(!state.ownerDrawLog) state.ownerDrawLog=[];
+    state.ownerDrawLog.push({
+      id: uid("draw"), date: document.getElementById("draw-date").value,
+      amount, source:"Manual entry", notes: document.getElementById("draw-notes").value.trim()
+    });
+    await saveData(); showToast("Draw recorded"); render();
+  });
+  document.querySelectorAll(".li-del[data-draw]").forEach(b=>{
+    b.addEventListener("click", async ()=>{
+      state.ownerDrawLog = state.ownerDrawLog.filter(d=>d.id!==b.getAttribute("data-draw"));
+      await saveData(); render();
+    });
+  });
   document.getElementById("tithe-submit").addEventListener("click", async ()=>{
     const amount = parseFloat(document.getElementById("tithe-amount").value)||0;
     if(amount<=0){ showToast("Enter an amount first"); return; }

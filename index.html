@@ -155,27 +155,49 @@
       loadData()/saveData() already assume the backend reassembles/
       splits a single combined JSON object — that contract must stay
       the same on both sides.
+
+   5. Save safety guard (hasLoadedOnce / lastLoadedCounts in saveData).
+      Two real data-loss incidents happened when a save pushed an empty
+      or half-loaded in-memory state over the Sheet. saveData() now
+      refuses to write until loadData() has succeeded at least once this
+      session, and asks for confirmation before any save that would
+      empty out pop-ups, venues, owner's draws or tithe payments, or drop
+      more than half of all logged sales. Only Restore from backup may
+      bypass this (force:true). Do not remove or weaken it.
+
+   6. Logged sales store their own unitPrice and unitCost. Revenue and
+      food cost for a sale must come from lineUnitPrice()/lineUnitCost(),
+      never from today's sellPrice()/productCost(), or editing costs or
+      menu prices would silently rewrite past pop-ups and orders.
+      Product IDs (PRODUCT_DEFS/COMBOS "name") are stored in every sale —
+      never rename one; change its label instead.
    ===================================================================== */
 /* ===================== SOURCE DATA — from BeefX costing sheet ===================== */
 const ITEM_DEFS = [
   {name:"Ground Beef",price:240,amt:1000,unit:"g"},
   {name:"Bacon Bits",price:276,amt:1000,unit:"g"},
   {name:"Longganisa Bits",price:290,amt:1000,unit:"g"},
+  {name:"CDO Sisig Meat",price:352,amt:1000,unit:"g"},
   {name:"Monterey Sisig",price:568,amt:1000,unit:"g"},
-  {name:"Mayonnaise",price:850,amt:3500,unit:"tub"},
+  {name:"Mayonnaise",price:850,amt:3500,unit:"g"},
   {name:"Fresh Basil",price:970,amt:1000,unit:"g"},
-  {name:"Fresh Kalamansi",price:60,amt:1000,unit:"g"},
+  {name:"Fresh Kalamansi",price:200,amt:1000,unit:"g"},
   {name:"Black Pepper - Ground",price:350,amt:500,unit:"g"},
+  {name:"Iodized Salt",price:37,amt:1000,unit:"g"},
+  {name:"Knorr Seasoning",price:117,amt:250,unit:"mL"},
+  {name:"Datu Puti Vinegar",price:47,amt:1000,unit:"mL"},
+  {name:"Chicharon",price:42,amt:90,unit:"g"},
   {name:"Aviko 7mm Fries - Yellow",price:1100,amt:10000,unit:"g"},
   {name:"Hamburger Wrapper",price:40,amt:100,unit:"pcs"},
   {name:"**Awesome Sauce",price:1103,amt:3500,unit:"g"},
+  {name:"Sisig Aioli",price:923.6,amt:3500,unit:"mL"},
   {name:"*Disposable Gloves",price:1,amt:1,unit:"pc"},
   {name:"*Ketchup",price:34.5,amt:320,unit:"g"},
   {name:"Gravy Mix",price:475,amt:1000,unit:"g"},
-  {name:"*Onion",price:200,amt:1000,unit:"g"},
+  {name:"*Onion",price:300,amt:1000,unit:"g"},
   {name:"Mozarella Brick",price:930,amt:2000,unit:"g"},
   {name:"Mustard",price:90.25,amt:200,unit:"g"},
-  {name:"Lettuce",price:800,amt:1000,unit:"g"},
+  {name:"Lettuce",price:300,amt:1000,unit:"g"},
   {name:"Che Vital",price:390,amt:72,unit:"pc"},
   {name:"Bun Supplier",price:55,amt:6,unit:"pc"},
   {name:"Clamshell Box",price:3000,amt:500,unit:"pc"},
@@ -185,48 +207,73 @@ const ITEM_DEFS = [
   {name:"Sinandomeng Rice",price:170,amt:2000,unit:"g"},
   {name:"Rice Meal Take Out Container",price:600,amt:50,unit:"pcs"}
 ];
+// Product IDs (the "name" field) are permanent internal tags stored inside every logged sale.
+// NEVER rename an existing ID — change the label instead. Note the legacy quirk: "Combo Siga"
+// is the BeefX BACON meal (Siga was briefly the Bacon burger's name). The current Siga burger
+// is the sisig burger, ID "BxSisig QTR", and its meal is "Combo Sisig".
 const PRODUCT_DEFS = [
   {name:"BxBacon QTR", label:"BeefX Bacon", sellable:true, defaultPrice:299},
   {name:"BxLongganisa QTR", label:"Bongga (BeefX Longganisa)", sellable:true, defaultPrice:319},
-  {name:"BxSisig QTR", label:"BxSisig QTR (in development)", sellable:false, defaultPrice:0},
-  {name:"Awesome", label:"Awesome Sauce (prep batch)", sellable:false, defaultPrice:0},
-  {name:"Sisig", label:"Sisig Sauce (prep, reference)", sellable:false, defaultPrice:0},
+  {name:"BxSisig QTR", label:"Siga (BeefX Sisig)", sellable:true, defaultPrice:329},
+  {name:"Awesome", label:"Awesome Sauce (prep batch)", sellable:false, batch:true, defaultPrice:0},
+  {name:"Sisig", label:"Sisig Aioli (prep batch)", sellable:false, batch:true, defaultPrice:0},
   {name:"Swakto Fries", label:"Swakto Fries", sellable:true, defaultPrice:59},
   {name:"Poutine 120g", label:"Poutine Nating Lahat", sellable:true, defaultPrice:159},
-  {name:"Animal Style Poutine (BACON)", label:"Animal Style Poutine (Bacon)", sellable:true, defaultPrice:229},
-  {name:"Animal Style Poutine (BONGGA)", label:"Animal Style Poutine (Bongga)", sellable:true, defaultPrice:229},
-  {name:"BURGER STEAK (BACON)", label:"Loko Mo Ko (Bacon)", sellable:true, defaultPrice:229},
-  {name:"BURGER STEAK (BONGGA)", label:"Loko Mo Ko (Bongga)", sellable:true, defaultPrice:229}
+  {name:"BURGER STEAK (BACON)", label:"Loko Mo Ko", sellable:true, defaultPrice:229},
+  // Not on the current menu — kept so older sales still show correctly. Set sellable:true to bring back.
+  {name:"Animal Style Poutine (BACON)", label:"Animal Style Poutine (Bacon)", sellable:false, defaultPrice:229},
+  {name:"Animal Style Poutine (BONGGA)", label:"Animal Style Poutine (Bongga)", sellable:false, defaultPrice:229},
+  {name:"BURGER STEAK (BONGGA)", label:"Loko Mo Ko (Bongga)", sellable:false, defaultPrice:229}
 ];
 const COMBOS = [
-  {name:"Combo Siga", label:"Combo Meal (BeefX Bacon)", parts:["BxBacon QTR","Poutine 120g"], defaultPrice:419},
-  {name:"Combo Bongga", label:"Combo Meal (Bongga)", parts:["BxLongganisa QTR","Poutine 120g"], defaultPrice:419}
+  {name:"Combo Siga", label:"BeefX Bacon Meal", parts:["BxBacon QTR","Poutine 120g"], defaultPrice:419},
+  {name:"Combo Bongga", label:"Bongga Meal", parts:["BxLongganisa QTR","Poutine 120g"], defaultPrice:429},
+  {name:"Combo Sisig", label:"Siga Meal", parts:["BxSisig QTR","Poutine 120g"], defaultPrice:439}
 ];
+// Prices that were in effect before the Nov 2026 menu update. Sales logged before this version
+// carry no price of their own, so they are valued at these — never at today's menu prices.
+const LEGACY_PRICES = {
+  "BxBacon QTR":299, "BxLongganisa QTR":319, "Swakto Fries":59, "Poutine 120g":159,
+  "Animal Style Poutine (BACON)":229, "Animal Style Poutine (BONGGA)":229,
+  "BURGER STEAK (BACON)":229, "BURGER STEAK (BONGGA)":229, "Combo Siga":419, "Combo Bongga":419
+};
+// Ingredients whose price is not typed in but calculated from their own prep-batch recipe.
+// Change mayo or basil, and the Awesome Sauce cost per gram — and every burger using it — follows.
+const SAUCE_FROM_BATCH = { "**Awesome Sauce":"Awesome", "Sisig Aioli":"Sisig" };
+// Bumped whenever the built-in recipe below is re-synced to the Beef X 2026 COSTING sheet.
+// On first load of a new version, old in-app ingredient/portion/price edits are cleared once so
+// the sheet values take effect (stock thresholds and manual stock adjustments are kept).
+const COSTING_VERSION = "2026-11-06";
 const BASE_PORTIONS = {
   "Ground Beef": {"BxBacon QTR":57,"BxLongganisa QTR":57,"BxSisig QTR":57,"Animal Style Poutine (BACON)":57,"Animal Style Poutine (BONGGA)":57,"BURGER STEAK (BACON)":57,"BURGER STEAK (BONGGA)":57},
   "Bacon Bits": {"BxBacon QTR":57,"Animal Style Poutine (BACON)":57,"BURGER STEAK (BACON)":57},
   "Longganisa Bits": {"BxLongganisa QTR":57,"Animal Style Poutine (BONGGA)":57,"BURGER STEAK (BONGGA)":57},
-  "Monterey Sisig": {"BxSisig QTR":57},
-  "Mayonnaise": {"Awesome":3500,"Sisig":1},
+  "CDO Sisig Meat": {"BxSisig QTR":57},
+  "Mayonnaise": {"Awesome":3500,"Sisig":3500},
   "Fresh Basil": {"Awesome":250},
-  "Fresh Kalamansi": {"Sisig":125},
-  "Black Pepper - Ground": {"Awesome":15},
+  "Fresh Kalamansi": {"BxSisig QTR":5,"Sisig":92},
+  "Black Pepper - Ground": {"BxBacon QTR":0.3,"BxLongganisa QTR":0.3,"BxSisig QTR":0.3,"Awesome":15,"Sisig":10},
+  "Iodized Salt": {"BxBacon QTR":0.2,"BxLongganisa QTR":0.2,"BxSisig QTR":0.2},
+  "Knorr Seasoning": {"Sisig":100},
+  "Datu Puti Vinegar": {"Sisig":30},
+  "Chicharon": {"BxSisig QTR":3},
   "Aviko 7mm Fries - Yellow": {"Swakto Fries":120,"Poutine 120g":120,"Animal Style Poutine (BACON)":120,"Animal Style Poutine (BONGGA)":120,"BURGER STEAK (BACON)":50,"BURGER STEAK (BONGGA)":50},
   "Hamburger Wrapper": {"BxBacon QTR":1,"BxLongganisa QTR":1,"BxSisig QTR":1},
   "**Awesome Sauce": {"BxBacon QTR":20,"BxLongganisa QTR":20},
-  "*Disposable Gloves": {"BxLongganisa QTR":1},
+  "Sisig Aioli": {"BxSisig QTR":20},
+  "*Disposable Gloves": {"BxBacon QTR":1,"BxLongganisa QTR":1,"BxSisig QTR":1},
   "*Ketchup": {"BxBacon QTR":5,"BxLongganisa QTR":5},
   "Gravy Mix": {"Poutine 120g":5,"Animal Style Poutine (BACON)":5,"Animal Style Poutine (BONGGA)":5,"BURGER STEAK (BACON)":5,"BURGER STEAK (BONGGA)":5},
-  "*Onion": {"BxBacon QTR":10,"BxLongganisa QTR":10,"Animal Style Poutine (BACON)":5,"Animal Style Poutine (BONGGA)":5},
+  "*Onion": {"BxBacon QTR":10,"BxLongganisa QTR":10,"BxSisig QTR":10,"Animal Style Poutine (BACON)":5,"Animal Style Poutine (BONGGA)":5},
   "Mozarella Brick": {"Poutine 120g":35,"Animal Style Poutine (BACON)":35,"Animal Style Poutine (BONGGA)":35},
   "Mustard": {"BxBacon QTR":5,"BxLongganisa QTR":5},
-  "Lettuce": {"BxBacon QTR":10,"BxLongganisa QTR":10},
-  "Che Vital": {"BxBacon QTR":1,"BxLongganisa QTR":1},
-  "Bun Supplier": {"BxBacon QTR":6,"BxLongganisa QTR":6},
-  "Clamshell Box": {"BxBacon QTR":1,"BxLongganisa QTR":1,"Swakto Fries":1,"Poutine 120g":1,"Animal Style Poutine (BACON)":1,"Animal Style Poutine (BONGGA)":1},
-  "Plastic Carrier": {"BxBacon QTR":1,"BxLongganisa QTR":1,"Swakto Fries":1,"Poutine 120g":1,"Animal Style Poutine (BACON)":1,"Animal Style Poutine (BONGGA)":1,"BURGER STEAK (BACON)":1,"BURGER STEAK (BONGGA)":1},
-  "Beef X Stickers": {"BxBacon QTR":1,"BxLongganisa QTR":1,"Swakto Fries":1,"Poutine 120g":1,"Animal Style Poutine (BACON)":1,"Animal Style Poutine (BONGGA)":1,"BURGER STEAK (BACON)":1,"BURGER STEAK (BONGGA)":1},
-  "Egg": {"BxLongganisa QTR":1,"BURGER STEAK (BACON)":1,"BURGER STEAK (BONGGA)":1},
+  "Lettuce": {"BxBacon QTR":10,"BxLongganisa QTR":10,"BxSisig QTR":10},
+  "Che Vital": {"BxBacon QTR":1,"BxLongganisa QTR":1,"BxSisig QTR":1},
+  "Bun Supplier": {"BxBacon QTR":1,"BxLongganisa QTR":1,"BxSisig QTR":1},
+  "Clamshell Box": {"BxBacon QTR":1,"BxLongganisa QTR":1,"BxSisig QTR":1,"Swakto Fries":1,"Poutine 120g":1,"Animal Style Poutine (BACON)":1,"Animal Style Poutine (BONGGA)":1},
+  "Plastic Carrier": {"BxBacon QTR":1,"BxLongganisa QTR":1,"BxSisig QTR":1,"Swakto Fries":1,"Poutine 120g":1,"Animal Style Poutine (BACON)":1,"Animal Style Poutine (BONGGA)":1,"BURGER STEAK (BACON)":1,"BURGER STEAK (BONGGA)":1},
+  "Beef X Stickers": {"BxBacon QTR":1,"BxLongganisa QTR":1,"BxSisig QTR":1,"Swakto Fries":1,"Poutine 120g":1,"Animal Style Poutine (BACON)":1,"Animal Style Poutine (BONGGA)":1,"BURGER STEAK (BACON)":1,"BURGER STEAK (BONGGA)":1},
+  "Egg": {"BxLongganisa QTR":1,"BxSisig QTR":1,"BURGER STEAK (BACON)":1,"BURGER STEAK (BONGGA)":1},
   "Sinandomeng Rice": {"BURGER STEAK (BACON)":85,"BURGER STEAK (BONGGA)":85},
   "Rice Meal Take Out Container": {"BURGER STEAK (BACON)":1,"BURGER STEAK (BONGGA)":1}
 };
@@ -522,6 +569,28 @@ let state = {
   venuesView: "list"
 };
 let isWriting=false, lastLocalWrite=0, pollTimer=null;
+// Save safety (see item 5 in the warning block at the top of this script): nothing may be
+// written to the Sheet until a load from the Sheet has fully succeeded in this session.
+let hasLoadedOnce = false;
+let lastLoadedCounts = null;
+function dataCounts(src){
+  return {
+    popupEvents: (src.popupEvents||[]).length,
+    saleEntries: (src.popupEvents||[]).reduce((a,e)=>a+(e.days||[]).reduce((b,d)=>b+(d.entries||[]).length,0),0),
+    venues: (src.venues||[]).length,
+    ownerDrawLog: (src.ownerDrawLog||[]).length,
+    tithePayments: (src.tithePayments||[]).length,
+    homeOrders: (src.homeOrders||[]).length
+  };
+}
+// One-time cleanup when this file's built-in recipe has been re-synced to the costing sheet:
+// old in-app price/portion/menu-price edits are dropped so the sheet values take effect.
+function applyCostingMigration(){
+  const meta = state.itemOverrides.__meta || {};
+  if(meta.costingVersion===COSTING_VERSION) return;
+  resetCostingEdits();
+  state.itemOverrides.__meta = Object.assign({}, meta, { costingVersion: COSTING_VERSION });
+}
 let syncStatus = { state:"idle", lastSavedAt:null, lastError:null, lastLoadedAt:null };
 
 function updateSyncBadge(){
@@ -576,6 +645,9 @@ async function loadData(isInitial){
       state.reserveFloor = p.reserveFloor!==undefined ? p.reserveFloor : 10000;
       syncStatus.lastLoadedAt = Date.now();
     }
+    lastLoadedCounts = dataCounts(p||{});
+    applyCostingMigration();
+    hasLoadedOnce = true;
     return true;
   }catch(e){
     // A failed read must never reset state — that is what caused the earlier data-loss
@@ -583,8 +655,26 @@ async function loadData(isInitial){
     return false;
   }
 }
-async function saveData(){
+async function saveData(opts){
   if(!APPS_SCRIPT_URL){ showToast("Set up your Google Sheet connection first — see Setup"); return false; }
+  const force = !!(opts && opts.force);
+  if(!hasLoadedOnce && !force){
+    syncStatus.state="error"; syncStatus.lastError="not loaded"; updateSyncBadge();
+    showToast("Not saved — your data hasn't loaded yet. Tap Refresh, then try again.");
+    return false;
+  }
+  if(!force && lastLoadedCounts){
+    const now = dataCounts(state);
+    const wiped = ["popupEvents","venues","ownerDrawLog","tithePayments"].filter(k=>lastLoadedCounts[k]>0 && now[k]===0);
+    const lostSales = lastLoadedCounts.saleEntries>=10 && now.saleEntries < lastLoadedCounts.saleEntries*0.5;
+    if(wiped.length || lostSales){
+      const what = [...wiped.map(k=>({popupEvents:"all pop-ups",venues:"all venue notes",ownerDrawLog:"all owner's draws",tithePayments:"all tithe payments"}[k])), ...(lostSales?["more than half of all logged sales"]:[])].join(", ");
+      if(!confirm("This save would erase "+what+" from your Google Sheet. Only continue if you meant to delete them. Save anyway?")){
+        showToast("Not saved — tap Refresh to reload your data");
+        return false;
+      }
+    }
+  }
   isWriting=true;
   syncStatus.state="saving"; updateSyncBadge();
   const bodyToSend = {
@@ -607,6 +697,7 @@ async function saveData(){
     const resText = await res.text();
     console.log("[BeefX DEBUG] saveData server responded with:", resText);
     lastLocalWrite=Date.now();
+    lastLoadedCounts = dataCounts(bodyToSend);
     syncStatus.state="idle"; syncStatus.lastSavedAt=Date.now(); syncStatus.lastError=null;
     updateSyncBadge();
     return true;
@@ -651,16 +742,20 @@ function escapeHtml(s){ if(s===undefined||s===null) return ""; return String(s).
 function getAllItems(){ return [...ITEM_DEFS, ...state.customItems]; }
 function isArchived(name){ return !!(state.itemArchived && state.itemArchived[name]); }
 function activeItems(){ return getAllItems().filter(i=>!isArchived(i.name)); }
-function itemCfg(name){
+// useDefaults=true ignores every in-app edit and uses the built-in sheet values — used only to
+// value old sales that were logged before sales started carrying their own cost.
+function itemCfg(name, useDefaults){
   const def = getAllItems().find(i=>i.name===name) || {price:0,amt:1,unit:""};
-  const ov = state.itemOverrides[name]||{};
-  return { price: ov.price!==undefined?ov.price:def.price, amt: ov.amt!==undefined?ov.amt:def.amt, unit: ov.unit!==undefined?ov.unit:def.unit };
+  const ov = useDefaults ? {} : (state.itemOverrides[name]||{});
+  const cfg = { price: ov.price!==undefined?ov.price:def.price, amt: ov.amt!==undefined?ov.amt:def.amt, unit: ov.unit!==undefined?ov.unit:def.unit };
+  if(SAUCE_FROM_BATCH[name]) cfg.price = baseProductCost(SAUCE_FROM_BATCH[name], useDefaults);
+  return cfg;
 }
-function getPortion(item,product){
+function getPortion(item,product,useDefaults){
   const key=item+"|||"+product;
-  if(state.portionOverrides[key]!==undefined) return state.portionOverrides[key];
+  if(!useDefaults && state.portionOverrides[key]!==undefined) return state.portionOverrides[key];
   if(item==="**Awesome Sauce" && (product==="BxBacon QTR"||product==="BxLongganisa QTR")){
-    return awesomeSaucePerBurger();
+    return useDefaults ? 20 : awesomeSaucePerBurger();
   }
   return (BASE_PORTIONS[item] && BASE_PORTIONS[item][product]) || 0;
 }
@@ -669,22 +764,50 @@ function awesomeSauceServingsPerBatch(){
   return ov.servingsPerBatch!==undefined ? ov.servingsPerBatch : 175;
 }
 function awesomeSaucePerBurger(){
-  const cfg = itemCfg("**Awesome Sauce");
+  const def = ITEM_DEFS.find(i=>i.name==="**Awesome Sauce");
+  const ov = state.itemOverrides["**Awesome Sauce"]||{};
+  const amt = ov.amt!==undefined ? ov.amt : def.amt;
   const servings = awesomeSauceServingsPerBatch();
-  return servings>0 ? cfg.amt/servings : 0;
+  return servings>0 ? amt/servings : 0;
 }
-function baseProductCost(product){
+let _costDepth = 0;
+function baseProductCost(product, useDefaults){
+  if(_costDepth>3) return 0; // guards against a batch recipe that (by mistake) uses its own sauce
+  _costDepth++;
   let total=0;
-  ITEM_DEFS.forEach(it=>{
-    const portion = getPortion(it.name, product);
-    if(portion>0){ const cfg=itemCfg(it.name); total += portion * (cfg.price/cfg.amt); }
-  });
+  try{
+    getAllItems().forEach(it=>{
+      const portion = getPortion(it.name, product, useDefaults);
+      if(portion>0){ const cfg=itemCfg(it.name, useDefaults); if(cfg.amt>0) total += portion * (cfg.price/cfg.amt); }
+    });
+  } finally { _costDepth--; }
   return total;
 }
-function productCost(product){
+function productCost(product, useDefaults){
   const combo = COMBOS.find(c=>c.name===product);
-  if(combo) return combo.parts.reduce((a,p)=>a+baseProductCost(p),0);
-  return baseProductCost(product);
+  if(combo) return combo.parts.reduce((a,p)=>a+baseProductCost(p, useDefaults),0);
+  return baseProductCost(product, useDefaults);
+}
+// Cost of a product using only the built-in sheet values — fixed, never moved by later edits.
+const _legacyCostCache = {};
+function legacyCost(product){
+  if(_legacyCostCache[product]===undefined) _legacyCostCache[product] = productCost(product, true);
+  return _legacyCostCache[product];
+}
+// What one unit of a logged sale is worth. Every sale logged from this version on stores the
+// price and cost in effect at that moment, so editing costs or menu prices later never rewrites
+// past pop-ups or orders. Older sales fall back to the pre-update menu prices and sheet costs.
+function lineUnitPrice(line){
+  if(line.unitPrice!==undefined) return Number(line.unitPrice)||0;
+  if(LEGACY_PRICES[line.product]!==undefined) return LEGACY_PRICES[line.product];
+  return sellPrice(line.product);
+}
+function lineUnitCost(line){
+  if(line.unitCost!==undefined) return Number(line.unitCost)||0;
+  return legacyCost(line.product);
+}
+function snapshotLine(product, qty){
+  return { product, qty, unitPrice: sellPrice(product), unitCost: Math.round(productCost(product)*100)/100 };
 }
 function sellPrice(product){
   if(state.priceOverrides[product]!==undefined) return state.priceOverrides[product];
@@ -761,7 +884,9 @@ const PATTY_FOR_PRODUCT = {
   "BURGER STEAK (BACON)": "BeefX Bacon Patties (Siga)",
   "BURGER STEAK (BONGGA)": "BeefX Longganisa Patties (Bongga)",
   "Animal Style Poutine (BACON)": "BeefX Bacon Patties (Siga)",
-  "Animal Style Poutine (BONGGA)": "BeefX Longganisa Patties (Bongga)"
+  "Animal Style Poutine (BONGGA)": "BeefX Longganisa Patties (Bongga)",
+  "BxSisig QTR": "BeefX Sisig Patties",
+  "Combo Sisig": "BeefX Sisig Patties"
 };
 function dayAllocatedQty(day, itemName){
   return (day.allocations||[]).filter(a=>a.item===itemName).reduce((a,al)=>a+(Number(al.qty)||0),0);
@@ -948,73 +1073,90 @@ function importBackup(e){
       state.itemArchived = p.itemArchived||{};
       state.ownerDrawLog = p.ownerDrawLog||[];
       state.reserveFloor = p.reserveFloor!==undefined ? p.reserveFloor : 10000;
-      const ok = await saveData();
-      if(ok){ showToast("Backup restored"); render(); }
+      const ok = await saveData({force:true});
+      if(ok){ hasLoadedOnce = true; showToast("Backup restored"); render(); }
     }catch(err){ showToast("That file couldn't be read — check it's a BeefX backup file"); }
   };
   reader.readAsText(file);
 }
 
 /* ===================== COSTING TAB ===================== */
+function costingColumns(){
+  // Every product that has its own recipe: what's on the menu, then the two prep batches.
+  return [...PRODUCT_DEFS.filter(p=>p.sellable).map(p=>p.name), ...PRODUCT_DEFS.filter(p=>p.batch).map(p=>p.name)];
+}
+function costingIngredients(){
+  // Built-in ingredients plus any you added in Inventory (finished patties are stock, not ingredients).
+  return [...ITEM_DEFS, ...state.customItems.filter(i=>!/ Patties( \(|$)/.test(i.name))].filter(i=>!isArchived(i.name));
+}
+function shortLabel(product){
+  const l = productLabel(product);
+  if(product==="Awesome") return "Awesome batch";
+  if(product==="Sisig") return "Aioli batch";
+  return l.split(" (")[0];
+}
 function renderCosting(main){
-  let html = `<div class="card"><h2 style="margin:0 0 4px;font-size:13px;">Product cost & pricing</h2>
-    <p class="helptext">Cost = sum of (portion used × price ÷ package amount) per ingredient — same formula as your sheet.</p>
-    <div class="tablewrap"><table><tr><th>Product</th><th style="text-align:right;">Food cost</th><th style="text-align:right;">Sell price</th><th style="text-align:right;">Margin</th></tr>`;
-  [...PRODUCT_DEFS, ...COMBOS].forEach(p=>{
-    const isCombo = !!COMBOS.find(c=>c.name===p.name);
-    if(!isCombo && !p.sellable) return;
+  let html = `<div class="card"><h2 style="margin:0 0 4px;font-size:13px;">Menu cost & pricing</h2>
+    <p class="helptext">Cost is worked out from the ingredient prices and portions further down. Change any of them and every number here follows. New prices and costs apply to sales logged from now on — past pop-ups and orders keep what they were logged at.</p>
+    <div class="tablewrap"><table><tr><th>Item</th><th style="text-align:right;">Cost</th><th style="text-align:right;">Price ₱</th><th style="text-align:right;">Food cost</th><th style="text-align:right;">Profit</th></tr>`;
+  [...PRODUCT_DEFS.filter(p=>p.sellable), ...COMBOS].forEach(p=>{
     const cost = productCost(p.name);
     const price = sellPrice(p.name);
-    const margin = price>0 ? ((price-cost)/price*100) : 0;
+    const fc = price>0 ? (cost/price*100) : 0;
     html += `<tr>
       <td>${escapeHtml(p.label)}</td>
-      <td class="num">${money(cost)}</td>
-      <td class="num"><input type="number" data-price="${escapeHtml(p.name)}" value="${price}" style="width:60px;"></td>
-      <td class="num" style="color:${margin>=0?'var(--grn)':'var(--red)'};">${margin.toFixed(0)}%</td>
+      <td class="num">₱${cost.toFixed(2)}</td>
+      <td class="num"><input type="number" data-price="${escapeHtml(p.name)}" value="${price}" style="width:64px;"></td>
+      <td class="num" style="color:${fc<=30?'var(--grn)':fc<=35?'var(--amb)':'var(--red)'};">${fc.toFixed(1)}%</td>
+      <td class="num">${money(price-cost)}</td>
     </tr>`;
   });
-  html += `</table></div></div>`;
+  html += `</table></div>
+    <p class="helptext" style="margin-top:8px;">Food cost in green is at or under 30%, amber up to 35%, red above.</p></div>`;
 
-  const awesomeBatchCfg = itemCfg("**Awesome Sauce");
+  const awesomeCfg = itemCfg("**Awesome Sauce");
+  const aioliCfg = itemCfg("Sisig Aioli");
   const awesomeServings = awesomeSauceServingsPerBatch();
-  const awesomePerBurger = awesomeSaucePerBurger();
-  html += `<div class="card"><h2 style="margin:0 0 4px;font-size:13px;">Awesome Sauce batch economics</h2>
-    <p class="helptext">One batch costs ${money(productCost("Awesome"))} and yields ${fmt(awesomeBatchCfg.amt,"g")}. Set how many burgers that batch covers — the per-burger portion below recalculates automatically instead of being a fixed number.</p>
-    <label class="field" style="margin-bottom:0;max-width:220px;"><span>Servings per batch</span>
+  html += `<div class="card"><h2 style="margin:0 0 4px;font-size:13px;">Prep batches</h2>
+    <p class="helptext">A batch's cost comes from its own column in the table below, and that cost per gram is what the burgers pay for their sauce.</p>
+    <div class="tablewrap"><table>
+      <tr><th>Batch</th><th style="text-align:right;">Batch cost</th><th style="text-align:right;">Yield</th><th style="text-align:right;">Cost per g/mL</th></tr>
+      <tr><td>Awesome Sauce</td><td class="num">₱${awesomeCfg.price.toFixed(2)}</td><td class="num">${fmt(awesomeCfg.amt,awesomeCfg.unit)}</td><td class="num">₱${(awesomeCfg.amt>0?awesomeCfg.price/awesomeCfg.amt:0).toFixed(3)}</td></tr>
+      <tr><td>Sisig Aioli</td><td class="num">₱${aioliCfg.price.toFixed(2)}</td><td class="num">${fmt(aioliCfg.amt,aioliCfg.unit)}</td><td class="num">₱${(aioliCfg.amt>0?aioliCfg.price/aioliCfg.amt:0).toFixed(3)}</td></tr>
+    </table></div>
+    <label class="field" style="margin:10px 0 0;max-width:240px;"><span>Awesome Sauce: burgers per batch</span>
       <input type="number" id="awesome-servings" value="${awesomeServings}">
     </label>
-    <p class="helptext" style="margin-top:8px;">→ ${fmt(awesomePerBurger,"g")} of Awesome Sauce per BeefX Bacon/Bongga burger, used automatically in the recipe and in Inventory deduction.</p>
+    <p class="helptext" style="margin-top:6px;">That works out to ${fmt(awesomeSaucePerBurger(),"g")} per BeefX Bacon and Bongga burger, used in both costing and inventory.</p>
   </div>`;
 
-  html += `<div class="card"><h2 style="margin:0 0 4px;font-size:13px;">In development (not yet sellable)</h2>
-    <div class="tablewrap"><table><tr><th>Item</th><th style="text-align:right;">Cost so far</th></tr>
-      <tr><td>BxSisig QTR patty</td><td class="num">${money(productCost("BxSisig QTR"))}</td></tr>
-      <tr><td>Sisig Sauce (reference, per batch)</td><td class="num">${money(productCost("Sisig"))}</td></tr>
-    </table></div>
-    <p class="helptext" style="margin-top:8px;">BxSisig is missing bun, cheese, condiments, and packaging in the recipe below — still incomplete.</p>
-  </div>`;
-
-  html += `<h2 class="sectitle">Ingredient master & recipe portions</h2>
-  <p class="helptext">Edit price, package size, unit, or any portion. Everything above recalculates instantly.</p>
+  const cols = costingColumns();
+  html += `<h2 class="sectitle">Ingredient prices & recipe portions</h2>
+  <p class="helptext">Edit a price, package size, unit, or any portion and the whole app recalculates. Sauce prices are calculated from their batch, so they can't be typed in.</p>
   <div class="card tablewrap">
-  <table><tr><th>Ingredient</th><th>Price ₱</th><th>Pkg amt</th><th>Unit</th>${sellableProducts().filter(p=>!COMBOS.find(c=>c.name===p)).map(p=>`<th>${escapeHtml(productLabel(p).split(" (")[0])}</th>`).join("")}</tr>`;
-  ITEM_DEFS.filter(it=>!isArchived(it.name)).forEach(it=>{
+  <table><tr><th>Ingredient</th><th>Price ₱</th><th>Pkg amt</th><th>Unit</th><th style="text-align:right;">₱ per unit</th>${cols.map(p=>`<th>${escapeHtml(shortLabel(p))}</th>`).join("")}</tr>`;
+  costingIngredients().forEach(it=>{
     const cfg = itemCfg(it.name);
+    const derived = !!SAUCE_FROM_BATCH[it.name];
     html += `<tr>
       <td>${escapeHtml(it.name)}</td>
-      <td><input type="number" data-icfg="${escapeHtml(it.name)}|price" value="${cfg.price}"></td>
-      <td><input type="number" data-icfg="${escapeHtml(it.name)}|amt" value="${cfg.amt}"></td>
+      <td>${derived ? `<span title="Calculated from the batch recipe" style="color:#888;">₱${cfg.price.toFixed(2)}</span>` : `<input type="number" step="any" data-icfg="${escapeHtml(it.name)}|price" value="${cfg.price}">`}</td>
+      <td><input type="number" step="any" data-icfg="${escapeHtml(it.name)}|amt" value="${cfg.amt}"></td>
       <td><input type="text" data-icfg="${escapeHtml(it.name)}|unit" value="${escapeHtml(cfg.unit||"")}"></td>
-      ${sellableProducts().filter(p=>!COMBOS.find(c=>c.name===p)).map(p=>`<td><input type="number" data-portion="${escapeHtml(it.name)}|||${escapeHtml(p)}" value="${getPortion(it.name,p)}"></td>`).join("")}
+      <td class="num" style="font-weight:400;color:#666;">${cfg.amt>0?(cfg.price/cfg.amt).toFixed(3):"–"}</td>
+      ${cols.map(p=>{ const v=getPortion(it.name,p); return `<td><input type="number" step="any" data-portion="${escapeHtml(it.name)}|||${escapeHtml(p)}" value="${v}" style="${v>0?'font-weight:700;':'color:#bbb;'}"></td>`; }).join("")}
     </tr>`;
   });
-  html += `</table></div>`;
+  html += `<tr><td style="font-weight:800;">Cost</td><td></td><td></td><td></td><td></td>${cols.map(p=>`<td class="num">₱${productCost(p).toFixed(2)}</td>`).join("")}</tr>`;
+  html += `</table></div>
+  <div class="card">
+    <p class="helptext" style="margin-top:0;">Archived ingredients are hidden from this table but still count in any recipe that uses them. Un-archive them in Inventory to edit them here.</p>
+    <button class="btn full" id="reset-costing">Reset costing to the Beef X 2026 sheet values</button>
+  </div>`;
 
   main.innerHTML = html;
   document.getElementById("awesome-servings").addEventListener("change", async e=>{
-    if(!state.itemOverrides["**Awesome Sauce"]) state.itemOverrides["**Awesome Sauce"]={};
-    const cfg = itemCfg("**Awesome Sauce");
-    state.itemOverrides["**Awesome Sauce"] = {price:cfg.price, amt:cfg.amt, unit:cfg.unit, threshold:(state.itemOverrides["**Awesome Sauce"]||{}).threshold, manualAdjustment:(state.itemOverrides["**Awesome Sauce"]||{}).manualAdjustment, servingsPerBatch: parseFloat(e.target.value)||175};
+    state.itemOverrides["**Awesome Sauce"] = Object.assign({}, state.itemOverrides["**Awesome Sauce"]||{}, { servingsPerBatch: parseFloat(e.target.value)||175 });
     await saveData(); render();
   });
   main.querySelectorAll("input[data-price]").forEach(inp=>{
@@ -1026,10 +1168,11 @@ function renderCosting(main){
   main.querySelectorAll("input[data-icfg]").forEach(inp=>{
     inp.addEventListener("change", async ()=>{
       const [name,field] = inp.getAttribute("data-icfg").split("|");
-      if(!state.itemOverrides[name]) state.itemOverrides[name]={};
-      const cfg = itemCfg(name);
-      state.itemOverrides[name] = { price:cfg.price, amt:cfg.amt, unit:cfg.unit, threshold:(state.itemOverrides[name]||{}).threshold };
-      state.itemOverrides[name][field] = field==="unit" ? inp.value : (parseFloat(inp.value)||0);
+      // Merge, never replace: the same override record also holds this item's stock threshold,
+      // manual stock adjustment and (for Awesome Sauce) servings per batch.
+      const ov = Object.assign({}, state.itemOverrides[name]||{});
+      ov[field] = field==="unit" ? inp.value : (parseFloat(inp.value)||0);
+      state.itemOverrides[name] = ov;
       await saveData(); render();
     });
   });
@@ -1039,6 +1182,26 @@ function renderCosting(main){
       await saveData(); render();
     });
   });
+  document.getElementById("reset-costing").addEventListener("click", async ()=>{
+    if(!confirm("Clear every in-app change to ingredient prices, portions and menu prices, and go back to the sheet values? Stock levels and past sales are not affected.")) return;
+    resetCostingEdits();
+    const ok = await saveData();
+    if(ok) showToast("Costing reset to sheet values");
+    render();
+  });
+}
+// Clears in-app costing edits but keeps the stock fields that share the same override record.
+function resetCostingEdits(){
+  const KEEP = ["threshold","manualAdjustment","servingsPerBatch"];
+  Object.keys(state.itemOverrides).forEach(name=>{
+    if(name==="__meta") return;
+    if(!ITEM_DEFS.find(i=>i.name===name)) return; // custom items have no sheet value to go back to
+    const kept = {};
+    KEEP.forEach(k=>{ if(state.itemOverrides[name][k]!==undefined) kept[k]=state.itemOverrides[name][k]; });
+    if(Object.keys(kept).length) state.itemOverrides[name]=kept; else delete state.itemOverrides[name];
+  });
+  state.portionOverrides = {};
+  state.priceOverrides = {};
 }
 
 /* ===================== INVENTORY TAB ===================== */
@@ -1066,6 +1229,7 @@ function renderInventory(main){
       <select id="batch-type">
         <option value="BeefX Bacon">BeefX Bacon Batch</option>
         <option value="BeefX Longganisa">BeefX Longganisa Batch</option>
+        <option value="BeefX Sisig">BeefX Sisig Batch (Siga)</option>
         <option value="__new__">+ New patty type...</option>
       </select>
     </label>
@@ -1141,7 +1305,7 @@ function renderInventory(main){
     const isNew = e.target.value==="__new__";
     document.getElementById("batch-new-wrap").style.display = isNew ? "" : "none";
     document.getElementById("batch-secondary-label").textContent = isNew ? "Secondary ingredient used (g)" :
-      (e.target.value==="BeefX Bacon" ? "Bacon Bits used (g)" : "Longganisa Bits used (g)");
+      (e.target.value==="BeefX Bacon" ? "Bacon Bits used (g)" : e.target.value==="BeefX Sisig" ? "CDO Sisig Meat used (g)" : "Longganisa Bits used (g)");
   });
   document.getElementById("batch-submit").addEventListener("click", async ()=>{
     const typeSel = document.getElementById("batch-type").value;
@@ -1157,6 +1321,11 @@ function renderInventory(main){
       pattyType = newName;
       pattyItemName = newName + " Patties";
       secondaryItem = document.getElementById("batch-new-secondary").value;
+      if(!getAllItems().find(i=>i.name===pattyItemName)){
+        state.customItems.push({name:pattyItemName, price:0, amt:1, unit:"pcs"});
+      }
+    } else if(typeSel==="BeefX Sisig"){
+      pattyType = "BeefX Sisig"; pattyItemName = "BeefX Sisig Patties"; secondaryItem = "CDO Sisig Meat";
       if(!getAllItems().find(i=>i.name===pattyItemName)){
         state.customItems.push({name:pattyItemName, price:0, amt:1, unit:"pcs"});
       }
@@ -1283,10 +1452,10 @@ function showEditItemSheet(name){
 /* ===================== HOME DELIVERY TAB ===================== */
 let homeCart = []; // temporary line items being built for the order currently being logged
 function homeOrderTotal(order){
-  return order.items.reduce((a,it)=>a+sellPrice(it.product)*(it.qty||1), 0);
+  return order.items.reduce((a,it)=>a+lineUnitPrice(it)*(it.qty||1), 0);
 }
 function homeOrderCost(order){
-  return order.items.reduce((a,it)=>a+productCost(it.product)*(it.qty||1), 0);
+  return order.items.reduce((a,it)=>a+lineUnitCost(it)*(it.qty||1), 0);
 }
 function renderHomeDelivery(main){
   const orders = state.homeOrders||[];
@@ -1345,7 +1514,7 @@ function renderHomeDelivery(main){
       submissionDate: new Date().toISOString().slice(0,10),
       deliveryDate: document.getElementById("ho-date").value,
       slot: document.getElementById("ho-slot").value,
-      items: homeCart.map(c=>({product:c.product, qty:c.qty})),
+      items: homeCart.map(c=>snapshotLine(c.product, c.qty)),
       name, ig: document.getElementById("ho-ig").value.trim(),
       mobile: document.getElementById("ho-mobile").value.trim(),
       payment: document.getElementById("ho-payment").value,
@@ -1416,11 +1585,12 @@ function getEvent(id){ return state.popupEvents.find(e=>e.id===id); }
 function getDay(ev,id){ return ev.days.find(d=>d.id===id); }
 function dayTotals(day){
   let revenue=0,count=0,foodCost=0;
-  const byProduct={}, byPayment={Cash:0,GCash:0,GoTyme:0};
+  const byProduct={}, revenueByProduct={}, byPayment={Cash:0,GCash:0,GoTyme:0};
   day.entries.forEach(en=>{
-    const q=en.qty||1, price=sellPrice(en.product)*q, cost=productCost(en.product)*q;
+    const q=en.qty||1, price=lineUnitPrice(en)*q, cost=lineUnitCost(en)*q;
     revenue+=price; count+=q; foodCost+=cost;
     byProduct[en.product]=(byProduct[en.product]||0)+q;
+    revenueByProduct[en.product]=(revenueByProduct[en.product]||0)+price;
     byPayment[en.payment]=(byPayment[en.payment]||0)+price;
   });
   const rent = Number(day.rent)||0;
@@ -1438,7 +1608,7 @@ function dayTotals(day){
   const netProfit = grossProfit - opExTotal;
   const ownerDraw15 = netProfit>0 ? netProfit*0.15 : 0;
   const tithe = grossProfit>0 ? grossProfit*0.10 : 0;
-  return {revenue,count,byProduct,byPayment,foodCost,grossProfit,grossMarginPct,rent,laborCost,
+  return {revenue,count,byProduct,revenueByProduct,byPayment,foodCost,grossProfit,grossMarginPct,rent,laborCost,
     opExFromLog,opExTotal,primeCost,primeCostPct,netProfit,ownerDraw15,tithe,personalSpend,
     profit:netProfit /* kept for any legacy reference — now correctly equals true net profit */};
 }
@@ -1561,7 +1731,7 @@ function renderPopupEvent(main){
     html += `<h2 class="sectitle">Items sold today (live)</h2><div class="card tablewrap"><table>
       <tr><th>Product</th><th style="text-align:right;">Qty</th><th style="text-align:right;">Revenue</th></tr>`;
     Object.entries(dt.byProduct).sort((a,b)=>b[1]-a[1]).forEach(([prod,qty])=>{
-      html += `<tr><td>${escapeHtml(productLabel(prod))}</td><td class="num">${qty}</td><td class="num">${money(sellPrice(prod)*qty)}</td></tr>`;
+      html += `<tr><td>${escapeHtml(productLabel(prod))}</td><td class="num">${qty}</td><td class="num">${money(dt.revenueByProduct[prod]||0)}</td></tr>`;
     });
     html += `<tr><td style="font-weight:800;">Total</td><td class="num" style="font-weight:800;">${dt.count}</td><td class="num" style="font-weight:800;">${money(dt.revenue)}</td></tr>
     </table></div>`;
@@ -1619,7 +1789,7 @@ function renderPopupEvent(main){
     day.entries.slice().reverse().slice(0,15).forEach(en=>{
       const q=en.qty||1;
       html += `<div class="logrow"><div><div class="li-name">${q>1?q+"x ":""}${escapeHtml(productLabel(en.product))}</div>
-        <div class="li-meta">${escapeHtml(en.payment)} · ${money(sellPrice(en.product)*q)}</div></div>
+        <div class="li-meta">${escapeHtml(en.payment)} · ${money(lineUnitPrice(en)*q)}</div></div>
         <button class="li-del" data-entry="${en.id}">&times;</button></div>`;
     });
     html += `</div>`;
@@ -1713,7 +1883,7 @@ function showPaySheet(){
     const ev=getEvent(state.currentEventId), day=getDay(ev,state.currentDayId);
     console.log("[BeefX DEBUG] Logging sale — event:", ev && ev.name, "| day:", day && day.label, "| product:", product, "| qty:", qty);
     if(!ev || !day){ console.log("[BeefX DEBUG] ERROR: event or day not found!", {currentEventId: state.currentEventId, currentDayId: state.currentDayId}); }
-    day.entries.push({id:uid("sale"),product,payment:b.getAttribute("data-pm"),qty,time:new Date().toISOString()});
+    day.entries.push(Object.assign({id:uid("sale"),payment:b.getAttribute("data-pm"),time:new Date().toISOString()}, snapshotLine(product, qty)));
     console.log("[BeefX DEBUG] day.entries after push:", JSON.stringify(day.entries));
     console.log("[BeefX DEBUG] state.popupEvents entries count across all events:", state.popupEvents.reduce((a,e)=>a+e.days.reduce((b,d)=>b+d.entries.length,0),0));
     const saveOk = await saveData();
